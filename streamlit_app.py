@@ -13,8 +13,8 @@ def cargar():
     df.columns = [c.strip() for c in df.columns]
     return df
 
-df = cargar()
-col_hoy = df.columns[-1]
+df_orig = cargar()
+col_hoy = df_orig.columns[-1]
 
 def normalizar(v):
     v = str(v).upper().strip()
@@ -23,46 +23,80 @@ def normalizar(v):
     if "QRT" in v or "FUERA" in v or "SERVI" in v: return "FUERA DE SERVICIO"
     return v if v else "SIN DATO"
 
-df['ESTADO'] = df[col_hoy].apply(normalizar)
-conteo = df['ESTADO'].value_counts()
+df_orig['ESTADO'] = df_orig[col_hoy].apply(normalizar)
 
+# --- DETECTAR COLUMNA DEPENDENCIA ---
+col_dep = None
+for c in df_orig.columns:
+    if "DEPEN" in c.upper() or "UNIDAD" in c.upper() or "DESTINO" in c.upper() or "SECCION" in c.upper():
+        col_dep = c
+        break
+if not col_dep:
+    col_dep = df_orig.columns[0] # primera columna como fallback
+
+# --- FILTROS ---
+st.sidebar.title("🔍 Filtros")
+deps = ["TODAS"] + sorted(df_orig[col_dep].unique().tolist())
+dep_sel = st.sidebar.selectbox(f"Filtrar por {col_dep}:", deps)
+
+estados_sel = st.sidebar.multiselect("Estado:", ["NORMAL","PRECARIO","FUERA DE SERVICIO"], default=["NORMAL","PRECARIO","FUERA DE SERVICIO"])
+
+# Aplicar filtros
+df = df_orig.copy()
+if dep_sel!= "TODAS":
+    df = df[df[col_dep] == dep_sel]
+if estados_sel:
+    df = df[df['ESTADO'].isin(estados_sel)]
+
+conteo = df['ESTADO'].value_counts()
 total = len(df)
 normal = conteo.get("NORMAL",0)
 precario = conteo.get("PRECARIO",0)
 fuera = conteo.get("FUERA DE SERVICIO",0)
 
-st.title(f"🚔 DGSV Salta - {col_hoy}")
+# --- ENCABEZADO ---
+c_logo, c_tit = st.columns([1,5])
+with c_logo:
+    st.markdown("# 🚔")
+with c_tit:
+    st.title(f"DGSV Salta - {col_hoy}")
+    st.caption(f"Filtro: {dep_sel} | Total filtrado: {total} | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
 col1, col2, col3, col4 = st.columns(4)
-col1.markdown(f"<div style='background-color:#2C3E50;padding:20px;border-radius:10px;text-align:center'><h2 style='color:white;margin:0'>Total</h2><h1 style='color:white;margin:0'>{total}</h1></div>", unsafe_allow_html=True)
-col2.markdown(f"<div style='background-color:#2ECC71;padding:20px;border-radius:10px;text-align:center'><h2 style='color:black;margin:0'>NORMAL</h2><h1 style='color:black;margin:0'>{normal}</h1></div>", unsafe_allow_html=True)
-col3.markdown(f"<div style='background-color:#F1C40F;padding:20px;border-radius:10px;text-align:center'><h2 style='color:black;margin:0'>PRECARIO</h2><h1 style='color:black;margin:0'>{precario}</h1></div>", unsafe_allow_html=True)
-col4.markdown(f"<div style='background-color:#E74C3C;padding:20px;border-radius:10px;text-align:center'><h2 style='color:white;margin:0'>FUERA</h2><h1 style='color:white;margin:0'>{fuera}</h1></div>", unsafe_allow_html=True)
+col1.markdown(f"<div style='background-color:#2C3E50;padding:20px;border-radius:10px;text-align:center'><h3 style='color:white;margin:0'>TOTAL</h3><h1 style='color:white;margin:0'>{total}</h1></div>", unsafe_allow_html=True)
+col2.markdown(f"<div style='background-color:#2ECC71;padding:20px;border-radius:10px;text-align:center'><h3 style='color:black;margin:0'>NORMAL</h3><h1 style='color:black;margin:0'>{normal}</h1></div>", unsafe_allow_html=True)
+col3.markdown(f"<div style='background-color:#F1C40F;padding:20px;border-radius:10px;text-align:center'><h3 style='color:black;margin:0'>PRECARIO</h3><h1 style='color:black;margin:0'>{precario}</h1></div>", unsafe_allow_html=True)
+col4.markdown(f"<div style='background-color:#E74C3C;padding:20px;border-radius:10px;text-align:center'><h3 style='color:white;margin:0'>FUERA</h3><h1 style='color:white;margin:0'>{fuera}</h1></div>", unsafe_allow_html=True)
 
 st.write("---")
-st.subheader("Estado de Flota")
+st.subheader(f"Estado de Flota - {dep_sel}")
 
-# DATA PARA GRAFICO CON COLORES
 graf = pd.DataFrame({
     "ESTADO": ["NORMAL","PRECARIO","FUERA DE SERVICIO"],
     "CANTIDAD": [normal, precario, fuera]
 })
 
-# Grafico con colores fijos
-chart = alt.Chart(graf).mark_bar(size=80, cornerRadiusTopLeft=10, cornerRadiusTopRight=10).encode(
-    x=alt.X('ESTADO', sort=None),
-    y='CANTIDAD',
+base = alt.Chart(graf).encode(
+    x=alt.X('ESTADO', sort=None, title=None),
+    y=alt.Y('CANTIDAD', title='Cantidad')
+)
+barras = base.mark_bar(size=90, cornerRadiusTopLeft=12, cornerRadiusTopRight=12).encode(
     color=alt.Color('ESTADO', scale=alt.Scale(
         domain=["NORMAL","PRECARIO","FUERA DE SERVICIO"],
         range=["#2ECC71", "#F1C40F", "#E74C3C"]
     ), legend=None),
     tooltip=['ESTADO','CANTIDAD']
-).properties(height=350)
-
+)
+texto = base.mark_text(dy=-15, fontSize=22, fontWeight='bold', color='white').encode(text='CANTIDAD')
+chart = (barras + texto).properties(height=400)
 st.altair_chart(chart, use_container_width=True)
 
-st.subheader("Detalle de Móviles")
+st.subheader(f"Detalle de Móviles - {dep_sel} ({total})")
 st.dataframe(df, use_container_width=True, height=600)
+
+# Boton descarga
+csv = df.to_csv(index=False).encode('utf-8')
+st.download_button("📥 Descargar Excel filtrado", csv, f"flota_{dep_sel}_{col_hoy}.csv", "text/csv")
 
 if st.button("🔄 Actualizar"):
     st.cache_data.clear()
