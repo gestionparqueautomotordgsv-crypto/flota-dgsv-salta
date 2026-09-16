@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import altair as alt
 from datetime import datetime
 
 st.set_page_config(page_title="DGSV - Flota", layout="wide", page_icon="🚔")
@@ -31,9 +32,7 @@ precario = conteo.get("PRECARIO",0)
 fuera = conteo.get("FUERA DE SERVICIO",0)
 
 st.title(f"🚔 DGSV Salta - {col_hoy}")
-st.caption(f"Actualizado: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
-# --- 4 CAJAS CON COLORES ---
 col1, col2, col3, col4 = st.columns(4)
 col1.markdown(f"<div style='background-color:#2C3E50;padding:20px;border-radius:10px;text-align:center'><h2 style='color:white;margin:0'>Total</h2><h1 style='color:white;margin:0'>{total}</h1></div>", unsafe_allow_html=True)
 col2.markdown(f"<div style='background-color:#2ECC71;padding:20px;border-radius:10px;text-align:center'><h2 style='color:black;margin:0'>NORMAL</h2><h1 style='color:black;margin:0'>{normal}</h1></div>", unsafe_allow_html=True)
@@ -42,7 +41,25 @@ col4.markdown(f"<div style='background-color:#E74C3C;padding:20px;border-radius:
 
 st.write("---")
 st.subheader("Estado de Flota")
-st.bar_chart(conteo)
+
+# DATA PARA GRAFICO CON COLORES
+graf = pd.DataFrame({
+    "ESTADO": ["NORMAL","PRECARIO","FUERA DE SERVICIO"],
+    "CANTIDAD": [normal, precario, fuera]
+})
+
+# Grafico con colores fijos
+chart = alt.Chart(graf).mark_bar(size=80, cornerRadiusTopLeft=10, cornerRadiusTopRight=10).encode(
+    x=alt.X('ESTADO', sort=None),
+    y='CANTIDAD',
+    color=alt.Color('ESTADO', scale=alt.Scale(
+        domain=["NORMAL","PRECARIO","FUERA DE SERVICIO"],
+        range=["#2ECC71", "#F1C40F", "#E74C3C"]
+    ), legend=None),
+    tooltip=['ESTADO','CANTIDAD']
+).properties(height=350)
+
+st.altair_chart(chart, use_container_width=True)
 
 st.subheader("Detalle de Móviles")
 st.dataframe(df, use_container_width=True, height=600)
