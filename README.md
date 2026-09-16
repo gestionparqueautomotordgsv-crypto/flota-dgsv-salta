@@ -1,25 +1,41 @@
-# 🎈 Blank app template
+import streamlit as st
+import pandas as pd
+from datetime import datetime
 
-A simple Streamlit app template for you to modify!
+st.set_page_config(page_title="DGSV - Flota", layout="wide", page_icon="🚔")
+URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRO9kumGN6YMvBI_hGc-D9Lb8y29RqNubvkIN1gpgN6I8QKjZ2QBNQ3ItyVkLZeuw/pub?gid=1702506345&single=true&output=csv"
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://blank-app-template.streamlit.app/)
+@st.cache_data(ttl=60)
+def cargar():
+    df = pd.read_csv(URL, dtype=str).fillna("")
+    df.columns = [c.strip() for c in df.columns]
+    return df
 
-### How to run it on your own machine
+df = cargar()
+col_hoy = df.columns[-1]
 
-Prerequisite: install `uv` if you don't already have it.
+def normalizar(v):
+    v = str(v).upper().strip()
+    if "NORMAL" in v: return "NORMAL"
+    if "PRECA" in v: return "PRECARIO"
+    if "QRT" in v or "FUERA" in v or "SERVI" in v: return "FUERA DE SERVICIO"
+    return v if v else "SIN DATO"
 
-```
-$ curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+df['ESTADO'] = df[col_hoy].apply(normalizar)
 
-1. Sync the dependencies
+st.title(f"🚔 DGSV Salta - {col_hoy}")
+st.caption(f"Actualizado: {datetime.now().strftime('%d/%m %H:%M')} | Total: {len(df)} móviles")
 
-   ```
-   $ uv sync
-   ```
+c1,c2,c3,c4 = st.columns(4)
+c1.metric("Total", len(df))
+c2.metric("✅ NORMAL", len(df[df['ESTADO']=="NORMAL"]))
+c3.metric("⚠️ PRECARIO", len(df[df['ESTADO']=="PRECARIO"]))
+c4.metric("❌ FUERA", len(df[df['ESTADO']=="FUERA DE SERVICIO"]))
 
-2. Run the app
+st.bar_chart(df['ESTADO'].value_counts())
 
-   ```
-   $ uv run streamlit run streamlit_app.py
-   ```
+filtro = st.multiselect("Filtrar por estado:", ["NORMAL","PRECARIO","FUERA DE SERVICIO"])
+df_show = df[df['ESTADO'].isin(filtro)] if filtro else df
+st.dataframe(df_show, use_container_width=True, height=600)
+
+if st.button("🔄 Actualizar"): st.cache_data.clear(); st.rerun()
