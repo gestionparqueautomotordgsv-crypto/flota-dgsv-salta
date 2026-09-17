@@ -5,7 +5,7 @@ from datetime import datetime
 
 st.set_page_config(page_title="DGSV - Flota", layout="wide", page_icon="🚔")
 
-URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRQ9kumGN6YMvBI_hGc-D9Lb8y29RqNubvKIN1gpgF/pub?output=csv"
+URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRO9kumGN6YMvBI_hGc-D9Lb8y29RqNubvkIN1gpgN6I8QKjZ2QBNQ3ItyVkLZeuw/pub?output=csv"
 
 @st.cache_data(ttl=60)
 def cargar():
