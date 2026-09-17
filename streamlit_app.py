@@ -5,7 +5,7 @@ from datetime import datetime
 
 st.set_page_config(page_title="DGSV - Flota", layout="wide", page_icon="🚔")
 
-URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRO9kumGN6YMvBI_hGc-D9Lb8y29RqNubvkIN1gpgN6I8QKjZ2QBNQ3ItyVkLZeuw/pub?gid=1702506345&single=true&output=csv"
+URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRQ9kumGN6YMvBI_hGc-D9Lb8y29RqNubvKIN1gpgF/pub?output=csv"
 
 @st.cache_data(ttl=60)
 def cargar():
@@ -13,91 +13,69 @@ def cargar():
     df.columns = [c.strip() for c in df.columns]
     return df
 
+def buscar_col(df, texto):
+    texto = texto.upper()
+    for col in df.columns:
+        if texto in str(col).upper():
+            return col
+    return None
+
 df_orig = cargar()
-col_hoy = df_orig.columns[-1]
 
-def normalizar(v):
-    v = str(v).upper().strip()
-    if "NORMAL" in v: return "NORMAL"
-    if "PRECA" in v: return "PRECARIO"
-    if "QRT" in v or "FUERA" in v or "SERVI" in v: return "FUERA DE SERVICIO"
-    return v if v else "SIN DATO"
+# Columnas fijas nuevas (no importa donde esten)
+col_km = buscar_col(df_orig, "KM ACTUAL")
+col_prox = buscar_col(df_orig, "PROXIMO SERVICE")
+col_movil = buscar_col(df_orig, "MOVIL")
+col_dep = buscar_col(df_orig, "DEPENDEN")
+col_tipo = buscar_col(df_orig, "4 RUEDAS")
 
-df_orig['ESTADO'] = df_orig[col_hoy].apply(normalizar)
+# Calcular alerta KM
+if col_km and col_prox:
+    df_orig[col_km] = pd.to_numeric(df_orig[col_km].str.replace(".","").str.replace(",",""), errors='coerce').fillna(0)
+    df_orig[col_prox] = pd.to_numeric(df_orig[col_prox].str.replace(".","").str.replace(",",""), errors='coerce').fillna(0)
 
-# --- DETECTAR COLUMNA DEPENDENCIA ---
-col_dep = None
-for c in df_orig.columns:
-    if "DEPEN" in c.upper() or "UNIDAD" in c.upper() or "DESTINO" in c.upper() or "SECCION" in c.upper():
-        col_dep = c
-        break
-if not col_dep:
-    col_dep = df_orig.columns[0] # primera columna como fallback
+    def alerta_km(row):
+        km = row[col_km]
+        prox = row[col_prox]
+        if prox == 0:
+            return "⚪ Sin dato"
+        if km >= prox:
+            return "🔴 SERVICE YA"
+        if km >= prox - 1000:
+            return "🟡 CERCA SERVICE"
+        return "🟢 OK"
 
-# --- FILTROS ---
-st.sidebar.title("🔍 Filtros")
-deps = ["TODAS"] + sorted(df_orig[col_dep].unique().tolist())
-dep_sel = st.sidebar.selectbox(f"Filtrar por {col_dep}:", deps)
+    df_orig["ALERTA SERVICE"] = df_orig.apply(alerta_km, axis=1)
+    df_orig["FALTAN KM"] = df_orig[col_prox] - df_orig[col_km]
 
-estados_sel = st.sidebar.multiselect("Estado:", ["NORMAL","PRECARIO","FUERA DE SERVICIO"], default=["NORMAL","PRECARIO","FUERA DE SERVICIO"])
+st.title("🚔 Flota DGSV Salta")
 
-# Aplicar filtros
-df = df_orig.copy()
-if dep_sel!= "TODAS":
-    df = df[df[col_dep] == dep_sel]
-if estados_sel:
-    df = df[df['ESTADO'].isin(estados_sel)]
+# Filtros
+if col_dep:
+    deps = ["TODOS"] + sorted(df_orig[col_dep].unique().tolist())
+    sel = st.selectbox("Dependencia", deps)
+    if sel!= "TODOS":
+        df = df_orig[df_orig[col_dep]==sel]
+    else:
+        df = df_orig
+else:
+    df = df_orig
 
-conteo = df['ESTADO'].value_counts()
-total = len(df)
-normal = conteo.get("NORMAL",0)
-precario = conteo.get("PRECARIO",0)
-fuera = conteo.get("FUERA DE SERVICIO",0)
+# Metricas de KM
+if col_km and col_prox:
+    cerca = df[df["ALERTA SERVICE"].str.contains("CERCA|SERVICE YA")].shape[0]
+    if cerca>0:
+        st.error(f"⚠️ {cerca} vehículos cerca de service")
+    else:
+        st.success("✅ Flota OK en KM")
 
-# --- ENCABEZADO ---
-c_logo, c_tit = st.columns([1,5])
-with c_logo:
-    st.markdown("# 🚔")
-with c_tit:
-    st.title(f"DGSV Salta - {col_hoy}")
-    st.caption(f"Filtro: {dep_sel} | Total filtrado: {total} | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+# Mostrar tabla con las columnas que te importan
+cols_mostrar = []
+for c in [col_dep, col_tipo, col_km, col_prox, "FALTAN KM", "ALERTA SERVICE", col_movil]:
+    if c and c in df.columns:
+        cols_mostrar.append(c)
 
-col1, col2, col3, col4 = st.columns(4)
-col1.markdown(f"<div style='background-color:#2C3E50;padding:20px;border-radius:10px;text-align:center'><h3 style='color:white;margin:0'>TOTAL</h3><h1 style='color:white;margin:0'>{total}</h1></div>", unsafe_allow_html=True)
-col2.markdown(f"<div style='background-color:#2ECC71;padding:20px;border-radius:10px;text-align:center'><h3 style='color:black;margin:0'>NORMAL</h3><h1 style='color:black;margin:0'>{normal}</h1></div>", unsafe_allow_html=True)
-col3.markdown(f"<div style='background-color:#F1C40F;padding:20px;border-radius:10px;text-align:center'><h3 style='color:black;margin:0'>PRECARIO</h3><h1 style='color:black;margin:0'>{precario}</h1></div>", unsafe_allow_html=True)
-col4.markdown(f"<div style='background-color:#E74C3C;padding:20px;border-radius:10px;text-align:center'><h3 style='color:white;margin:0'>FUERA</h3><h1 style='color:white;margin:0'>{fuera}</h1></div>", unsafe_allow_html=True)
+# agregar ultimas columnas de estado (fechas)
+cols_mostrar = cols_mostrar + [c for c in df.columns if "/" in c][-3:]
 
-st.write("---")
-st.subheader(f"Estado de Flota - {dep_sel}")
-
-graf = pd.DataFrame({
-    "ESTADO": ["NORMAL","PRECARIO","FUERA DE SERVICIO"],
-    "CANTIDAD": [normal, precario, fuera]
-})
-
-base = alt.Chart(graf).encode(
-    x=alt.X('ESTADO', sort=None, title=None),
-    y=alt.Y('CANTIDAD', title='Cantidad')
-)
-barras = base.mark_bar(size=90, cornerRadiusTopLeft=12, cornerRadiusTopRight=12).encode(
-    color=alt.Color('ESTADO', scale=alt.Scale(
-        domain=["NORMAL","PRECARIO","FUERA DE SERVICIO"],
-        range=["#2ECC71", "#F1C40F", "#E74C3C"]
-    ), legend=None),
-    tooltip=['ESTADO','CANTIDAD']
-)
-texto = base.mark_text(dy=-15, fontSize=22, fontWeight='bold', color='white').encode(text='CANTIDAD')
-chart = (barras + texto).properties(height=400)
-st.altair_chart(chart, use_container_width=True)
-
-st.subheader(f"Detalle de Móviles - {dep_sel} ({total})")
-st.dataframe(df, use_container_width=True, height=600)
-
-# Boton descarga
-csv = df.to_csv(index=False).encode('utf-8')
-st.download_button("📥 Descargar Excel filtrado", csv, f"flota_{dep_sel}_{col_hoy}.csv", "text/csv")
-
-if st.button("🔄 Actualizar"):
-    st.cache_data.clear()
-    st.rerun()
+st.dataframe(df[cols_mostrar], use_container_width=True, height=600)
