@@ -64,6 +64,30 @@ else:
 # Metricas de KM
 if col_km and col_prox:
     cerca = df[df["ALERTA SERVICE"].str.contains("CERCA|SERVICE YA")].shape[0]
+        # --- GRAFICO ---
+    st.subheader("📊 Estado por KM")
+    graf = df["ALERTA"].value_counts().reset_index()
+    graf.columns = ["Estado", "Cantidad"]
+    
+    chart = alt.Chart(graf).mark_bar().encode(
+        x='Estado',
+        y='Cantidad',
+        color='Estado',
+        tooltip=['Estado', 'Cantidad']
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+    # --- GRAFICO 2: Los que están más cerca ---
+    st.subheader("🚨 Top 5 más cerca del service")
+    top = df[df["FALTAN"]>0].sort_values("FALTAN").head(5)
+    if not top.empty and col_movil:
+        chart2 = alt.Chart(top).mark_bar().encode(
+            x=alt.X('FALTAN:Q', title='Faltan KM'),
+            y=alt.Y(f'{col_movil}:N', sort='-x', title='Móvil'),
+            color='ALERTA',
+            tooltip=[col_movil, 'FALTAN']
+        )
+        st.altair_chart(chart2, use_container_width=True)
     if cerca>0:
         st.error(f"⚠️ {cerca} vehículos cerca de service")
     else:
