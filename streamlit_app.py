@@ -96,7 +96,7 @@ def panel(df, nombre):
     st.altair_chart(chart, use_container_width=True)
     st.dataframe(df_f, use_container_width=True, height=600)
 
-st.title("🚔 Flota DGSV - En prueba")
+st.title("🚔 Flota DGSV - INICIO")
 t1,t2=st.tabs([f"🏍️ DOS RUEDAS ({len(df_2r)})", f"🚔 CUATRO RUEDAS ({len(df_4r)})"])
 with t1:
     panel(df_2r, "2R")
