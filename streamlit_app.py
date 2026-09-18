@@ -17,7 +17,7 @@ def buscar_col(df, txt):
     return None
 
 st.title("🚔 Flota DGSV - En prueba")
-if st.button("🔄 Actualizar fecha"):
+if st.button("🔄 Actualizar"):
     st.cache_data.clear()
     st.rerun()
 
@@ -59,7 +59,8 @@ def panel(df, nombre):
     qrt=len(df_f[df_f["ESTADO"]=="QRT"])
     servi=len(df_f[df_f["ESTADO"]=="SERVI"])
     precario=len(df_f[df_f["ESTADO"]=="PRECARIO"])
-    alerta=len(df_f[df_f["ESTADO"]=="ALERTA"])
+    alerta_df=df_f[df_f["ESTADO"]=="ALERTA"]
+    alerta=len(alerta_df)
     normal=len(df_f[df_f["ESTADO"]=="NORMAL"]) + alerta
 
     ca,cb,cc,cd,ce=st.columns(5)
@@ -69,17 +70,25 @@ def panel(df, nombre):
     cd.markdown(f"<div style='background:#fcc419;padding:15px;border-radius:12px;text-align:center'><b>🟡 PRECARIO</b><br><span style='font-size:30px'>{precario}</span></div>",unsafe_allow_html=True)
     ce.markdown(f"<div style='background:#1e293b;color:white;padding:15px;border-radius:12px;text-align:center'><b>Total</b><br><span style='font-size:30px'>{len(df_f)}</span></div>",unsafe_allow_html=True)
 
-    # --- ESTA ES LA NOTIFICACION QUE TE FALTABA ---
+    # --- NOTIFICACION CON TRIANGULO Y KM ---
     if alerta>0:
         st.markdown(f"""
-        <div style='background:#fff3cd;border:1px solid #ffe69c;padding:12px;border-radius:8px;margin-top:15px;color:#664d03'>
-        🟡 <b>ALERTA AMARILLA:</b> {alerta} próximos al service - <b>YA SUMADO EN NORMAL</b>
+        <div style='background:#fff3cd;border:1px solid #ffe69c;padding:12px;border-radius:8px;margin-top:15px;color:#664d03;font-size:16px'>
+        🟡 <b>ALERTA KM: {alerta} próximos al servi - DENTRO DE NORMAL</b>
         </div>
         """, unsafe_allow_html=True)
-    else:
+        for _, r in alerta_df.iterrows():
+            movil=str(r[col_movil]) if col_movil else "MOVIL"
+            km=str(r[col_km_act]) if col_km_act else "0"
+            prox=str(r[col_prox]) if col_prox else "0"
+            st.markdown(f"""
+            <div style='margin-top:10px;font-size:16px'>
+            ⚠️ <b>{movil} - {km}km / Toca {prox}km</b>
+            </div>
+            """, unsafe_allow_html=True)
         st.markdown(f"""
-        <div style='background:#d1e7dd;border:1px solid #a3cfbb;padding:12px;border-radius:8px;margin-top:15px;color:#0f5132'>
-        🟢 Sin alertas de service
+        <div style='margin-top:10px;padding:8px;background:#e2e3e5;border-radius:6px'>
+        🔵 <b>ALERTA PARA SERVI: {alerta} móviles</b> con alerta de km
         </div>
         """, unsafe_allow_html=True)
 
