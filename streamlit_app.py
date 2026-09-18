@@ -47,12 +47,11 @@ def panel(df, mostrar_azul=True):
         if "QRT" in v: return "QRT"
         if "SERVI" in v: return "SERVI"
         if "PRECAR" in v: return "PRECARIO"
+        # ACA ESTA EL ARREGLO: TODO LO QUE ESTA A 1000KM VA A ALERTA, QUE SE CUENTA EN NORMAL
         if col_km_act and col_prox:
             try:
                 km=int(float(str(row[col_km_act]).replace(".","").replace(",","").strip() or 0))
                 prox=int(float(str(row[col_prox]).replace(".","").replace(",","").strip() or 0))
-                if prox>0 and km>0 and km>=prox:
-                    return "SERVI"
                 if prox>0 and km>0 and km>=prox-1000:
                     return "ALERTA"
             except:
