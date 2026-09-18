@@ -19,7 +19,7 @@ def buscar_col(df, txt):
 ct, cb = st.columns([4,1])
 with ct: st.title("🚔 Flota DGSV - En prueba")
 with cb:
-    if st.button("🔄 Actualizar fecha"):
+    if st.button("🔄 Actualizar"):
         st.cache_data.clear()
         st.rerun()
 
@@ -30,7 +30,7 @@ col_dep=buscar_col(df_all,"DEPENDEN")
 col_km_act=buscar_col(df_all,"KM ACTUAL")
 col_prox=buscar_col(df_all,"PROXIMO")
 cols_fecha=[c for c in df_all.columns if "/" in c]
-col_estado = cols_fecha[-1] if cols_fecha else None # SIEMPRE la última a la derecha
+col_estado = cols_fecha[-1] if cols_fecha else None
 
 df_2r=df_all[df_all[col_tipo].str.contains("2",na=False)] if col_tipo else df_all
 df_4r=df_all[df_all[col_tipo].str.contains("4",na=False)] if col_tipo else df_all
@@ -47,7 +47,6 @@ def panel(df, nombre):
 
     def estado_final(row):
         v=str(row[col_estado]).upper().strip() if col_estado else ""
-        if v=="": return "NORMAL"  # VACIO = NORMAL, no precario viejo
         if "QRT" in v: return "QRT"
         if "SERVI" in v: return "SERVI"
         if col_km_act and col_prox:
@@ -65,7 +64,7 @@ def panel(df, nombre):
     servi=len(df_f[df_f["ESTADO"]=="SERVI"])
     precario=len(df_f[df_f["ESTADO"]=="PRECARIO"])
     alerta=len(df_f[df_f["ESTADO"]=="ALERTA"])
-    normal=len(df_f[df_f["ESTADO"]=="NORMAL"])+alerta
+    normal=len(df_f[df_f["ESTADO"]=="NORMAL"]) # <-- YA NO SUMA ALERTA
 
     ca,cb,cc,cd,ce=st.columns(5)
     ca.markdown(f"<div style='background:#ff6b6b;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🔴 QRT</b><br><span style='font-size:32px'>{qrt}</span></div>",unsafe_allow_html=True)
@@ -74,18 +73,19 @@ def panel(df, nombre):
     cd.markdown(f"<div style='background:#fcc419;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🟡 PRECARIO</b><br><span style='font-size:32px'>{precario}</span></div>",unsafe_allow_html=True)
     ce.markdown(f"<div style='background:#1e293b;padding:15px;border-radius:12px;text-align:center;color:white;height:95px'><b>Total</b><br><span style='font-size:32px'>{len(df_f)}</span></div>",unsafe_allow_html=True)
 
+    if alerta>0:
+        st.warning(f"🟡 ALERTA: {alerta} próximos al servi (no sumado en NORMAL)")
+
     st.divider()
     df_graf=df_f.copy()
-    df_graf["GRAF"]=df_graf["ESTADO"].replace({"ALERTA":"NORMAL"})
-    graf=df_graf["GRAF"].value_counts().reset_index()
+    graf=df_graf["ESTADO"].value_counts().reset_index()
     graf.columns=["Estado","Cantidad"]
     chart=alt.Chart(graf).mark_bar().encode(
-        x=alt.X('Estado:N', sort=["NORMAL","QRT","PRECARIO","SERVI"]),
+        x=alt.X('Estado:N'),
         y='Cantidad:Q',
-        color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI"], range=["#22c55e","#ef4444","#eab308","#3b82f6"]), legend=None)
+        color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI","ALERTA"], range=["#22c55e","#ef4444","#eab308","#3b82f6","#f59e0b"]), legend=None)
     ).properties(height=280)
     st.altair_chart(chart, use_container_width=True)
-    st.caption(f"Usando columna: {col_estado}")
     st.dataframe(df_f, use_container_width=True, height=600)
 
 t1,t2=st.tabs([f"🏍️ DOS RUEDAS ({len(df_2r)})", f"🚔 CUATRO RUEDAS ({len(df_4r)})"])
