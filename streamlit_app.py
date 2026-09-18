@@ -27,11 +27,10 @@ col_prox=buscar_col(df_all,"PROXIMO")
 cols_fecha=[c for c in df_all.columns if "/" in c]
 col_estado=cols_fecha[-1] if cols_fecha else None
 
-df_motos=df_all[df_all[col_tipo].str.contains("2", na=False)] if col_tipo else df_all
-df_autos=df_all[df_all[col_tipo].str.contains("4", na=False)] if col_tipo else df_all
+df_2r=df_all[df_all[col_tipo].str.contains("2", na=False)] if col_tipo else df_all
+df_4r=df_all[df_all[col_tipo].str.contains("4", na=False)] if col_tipo else df_all
 
 def panel(df, nombre):
-    st.markdown(f"### 🔍 Filtros {nombre}")
     c1,c2=st.columns(2)
     with c1:
         f_movil=st.text_input("MOVIL", placeholder="Ej: 2363", key=f"m_{nombre}").upper()
@@ -64,21 +63,23 @@ def panel(df, nombre):
     qrt=len(df_f[df_f["ESTADO"]=="QRT"])
     servi=len(df_f[df_f["ESTADO"]=="SERVI"])
     normal=len(df_f[df_f["ESTADO"]=="NORMAL"])
+    precario=len(df_f[df_f["ESTADO"]=="PRECARIO"])
     alerta_df=df_f[df_f["ESTADO"]=="ALERTA"]
 
-    # RESUMEN VISIBLE
-    ca,cb,cc,cd=st.columns(4)
-    ca.markdown(f"<div style='background:#ef4444;padding:12px;border-radius:10px;text-align:center;color:white'><b>🔴 QRT</b><br><span style='font-size:32px;font-weight:bold'>{qrt}</span></div>", unsafe_allow_html=True)
-    cb.markdown(f"<div style='background:#3b82f6;padding:12px;border-radius:10px;text-align:center;color:white'><b>🔵 SERVI</b><br><span style='font-size:32px;font-weight:bold'>{servi}</span></div>", unsafe_allow_html=True)
-    cc.markdown(f"<div style='background:#22c55e;padding:12px;border-radius:10px;text-align:center;color:white'><b>🟢 NORMAL</b><br><span style='font-size:32px;font-weight:bold'>{normal}</span></div>", unsafe_allow_html=True)
-    cd.markdown(f"<div style='background:#e2e8f0;padding:12px;border-radius:10px;text-align:center'><b>Total</b><br><span style='font-size:32px;font-weight:bold'>{len(df_f)}</span></div>", unsafe_allow_html=True)
+    # 5 CUADROS AHORA PARA QUE SUME 85
+    ca,cb,cc,cd,ce=st.columns(5)
+    ca.markdown(f"<div style='background:#ef4444;padding:12px;border-radius:10px;text-align:center;color:white'><b>🔴 QRT</b><br><span style='font-size:30px;font-weight:bold'>{qrt}</span></div>", unsafe_allow_html=True)
+    cb.markdown(f"<div style='background:#3b82f6;padding:12px;border-radius:10px;text-align:center;color:white'><b>🔵 SERVI</b><br><span style='font-size:30px;font-weight:bold'>{servi}</span></div>", unsafe_allow_html=True)
+    cc.markdown(f"<div style='background:#22c55e;padding:12px;border-radius:10px;text-align:center;color:white'><b>🟢 NORMAL</b><br><span style='font-size:30px;font-weight:bold'>{normal}</span></div>", unsafe_allow_html=True)
+    cd.markdown(f"<div style='background:#eab308;padding:12px;border-radius:10px;text-align:center;color:white'><b>🟡 PRECARIO</b><br><span style='font-size:30px;font-weight:bold'>{precario}</span></div>", unsafe_allow_html=True)
+    ce.markdown(f"<div style='background:#1e293b;padding:12px;border-radius:10px;text-align:center;color:white'><b>Total</b><br><span style='font-size:30px;font-weight:bold'>{len(df_f)}</span></div>", unsafe_allow_html=True)
 
     if len(alerta_df)>0:
         st.warning(f"🟡 ALERTA AMARILLA: {len(alerta_df)} próximos al servi (1000km antes)")
         for _, r in alerta_df.iterrows():
             st.write(f"⚠️ **{r[col_movil]}** - {r[col_km_act]}km / Toca {r[col_prox]}km - {r[col_dom]} - {r[col_dep]}")
 
-    # GRAFICO: NORMAL VERDE, QRT ROJO, PRECARIO AMARILLO, SERVI AZUL (sin alerta)
+    # GRAFICO 4 BARRAS: NORMAL, QRT, PRECARIO, SERVI
     df_graf=df_f.copy()
     df_graf["GRAF"]=df_graf["ESTADO"].replace({"ALERTA":"NORMAL"})
     graf=df_graf["GRAF"].value_counts().reset_index()
@@ -86,19 +87,17 @@ def panel(df, nombre):
     chart=alt.Chart(graf).mark_bar().encode(
         x=alt.X('Estado:N', sort=["NORMAL","QRT","PRECARIO","SERVI"]),
         y='Cantidad:Q',
-        color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI"], range=["#22c55e","#ef4444","#eab308","#3b82f6"]), legend=None),
-        tooltip=["Estado","Cantidad"]
+        color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI"], range=["#22c55e","#ef4444","#eab308","#3b82f6"]), legend=None)
     )
     st.altair_chart(chart, use_container_width=True)
-
-    # TABLA CON CONTEO POR DEPENDENCIA SI FILTRA
-    if f_dep:
-        st.info(f"Filtrando por {f_dep}: {len(df_f)} motos encontradas")
-    
     st.dataframe(df_f, use_container_width=True, height=600)
 
 st.title("🚔 Flota DGSV - En prueba")
 
-t1,t2=st.tabs([f"🏍️ MOTOS ({len(df_motos)})", f"🚔 AUTOS ({len(df_autos)})"])
-with t1: panel(df_motos, "MOTOS")
-with t2: panel(df_autos, "AUTOS")
+t1,t2=st.tabs([f"🏍️ DOS RUEDAS ({len(df_2r)})", f"🚔 CUATRO RUEDAS ({len(df_4r)})"])
+with t1: 
+    st.subheader(f"🔍 Filtros DOS RUEDAS")
+    panel(df_2r, "2R")
+with t2: 
+    st.subheader(f"🔍 Filtros CUATRO RUEDAS")
+    panel(df_4r, "4R")
