@@ -31,15 +31,20 @@ df_motos = df_all[df_all[col_tipo].str.contains("2", na=False)] if col_tipo else
 
 def panel(df, nombre):
     if df.empty: return
-    
-    # 1 - BUSCADOR
-    busc = st.text_input(f"🔍 Buscar en {nombre} (Movil, Dominio, Marca)", key=f"busc_{nombre}").upper()
+
+    busc = st.text_input(f"🔍 Buscar en {nombre}", placeholder="Ej: 2510, DGSV, AA123", key=f"busc_{nombre}").upper()
     df_f = df.copy()
     if busc:
         df_f = df_f[df_f.apply(lambda r: busc in str(r[col_movil]).upper() + str(r[col_dom]).upper() + str(r.to_string()).upper(), axis=1)]
+        if len(df_f) == 1:
+            r = df_f.iloc[0]
+            st.success(f"✅ {r[col_movil]} {r[col_dep]} - {r[col_dom]} - {r[col_estado]}")
+        elif len(df_f) > 1:
+            st.info(f"🔍 {len(df_f)} encontrados para: {busc} - {', '.join(df_f[col_movil].astype(str).tolist()[:10])}")
+        elif len(df_f) == 0:
+            st.warning(f"No se encontró {busc}")
 
-    # Filtro dependencia
-    if col_dep and col_dep in df.columns:
+    if col_dep and col_dep in df.columns and not busc:
         deps = ["TODOS"] + sorted([x for x in df[col_dep].unique() if x!=""])
         sel = st.selectbox(f"Filtro Dependencia {nombre}", deps, key=f"dep_{nombre}")
         if sel!="TODOS":
@@ -53,7 +58,7 @@ def panel(df, nombre):
             if "PRECAR" in v: return "🟡 PRECARIO"
             return "🟢 NORMAL"
         df_f["ESTADO HOY"] = df_f[col_estado].apply(sem)
-        
+
         c1,c2,c3,c4,c5 = st.columns(5)
         c1.metric("Total", len(df_f))
         c2.metric("🟢 NORMAL", len(df_f[df_f["ESTADO HOY"].str.contains("NORMAL")]))
@@ -71,13 +76,12 @@ def panel(df, nombre):
         )
         st.altair_chart(chart, use_container_width=True)
 
-        # 2 - BOTON QRT PARA WHATSAPP
         df_qrt = df_f[df_f["ESTADO HOY"].str.contains("QRT|SERVI")]
         if not df_qrt.empty:
             st.error(f"🔴 {len(df_qrt)} en QRT/SERVI")
             txt_wsp = f"*PARTE QRT/SERVI - {nombre} - {col_estado}*\n\n"
             for _, r in df_qrt.iterrows():
-                txt_wsp += f"• {r[col_movil]} - {r[col_dep]} - {r[col_estado]} - DOM: {r[col_dom]}\n"
+                txt_wsp += f"• {r[col_movil]} {r[col_dep]} - {r[col_estado]} - {r[col_dom]}\n"
             st.text_area("Texto listo para WhatsApp", txt_wsp, height=150, key=f"wsp_{nombre}")
             st.download_button(f"📥 Descargar lista QRT {nombre}", txt_wsp, file_name=f"QRT_{nombre}.txt", key=f"down_{nombre}")
 
@@ -87,7 +91,6 @@ st.title("🚔 DGSV - Flota")
 t1, t2 = st.tabs([f"🚔 MOVILES ({len(df_autos)})", f"🏍️ MOTOS ({len(df_motos)})"])
 with t1: panel(df_autos, "MOVILES 19")
 with t2: panel(df_motos, "MOTOS 85")
-
-if st.button("🔄 Actualizar"): 
+if st.button("🔄 Actualizar"):
     st.cache_data.clear()
     st.rerun()
