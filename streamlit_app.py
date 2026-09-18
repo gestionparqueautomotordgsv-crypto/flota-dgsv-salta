@@ -3,6 +3,37 @@ import pandas as pd
 import altair as alt
 
 st.set_page_config(page_title="DGSV - Flota", layout="wide", page_icon="🚔")
+
+# ===== USUARIOS =====
+USUARIOS = {
+    "admin": "dgsv2026",
+    "jefe": "1234",
+    "logistica": "log2026",
+    "usuario1": "1111",
+    "usuario2": "2222",
+    "usuario3": "3333",
+    "usuario4": "4444",
+    "usuario5": "5555",
+    "usuario6": "6666",
+    "usuario7": "7777",
+}
+
+if "login" not in st.session_state: st.session_state.login = False
+
+if not st.session_state.login:
+    st.markdown("""
+    <style>.stApp{background:#1e293b;} h1{color:#fb923c;text-align:center;font-family:monospace;}</style>
+    <h1>Ingreso al Sistema</h1>
+    """, unsafe_allow_html=True)
+    user = st.text_input("Usuario")
+    pwd = st.text_input("Contraseña", type="password")
+    if st.button("Iniciar sesión", type="primary", use_container_width=True):
+        if user in USUARIOS and USUARIOS[user]==pwd:
+            st.session_state.login=True; st.session_state.usuario_actual=user; st.rerun()
+        else: st.error("Usuario o clave incorrecta")
+    st.stop()
+
+# ===== APP =====
 URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRO9kumGN6YMvBI_hGc-D9Lb8y29RqNubvkIN1gpgN6I8QKjZ2QBNQ3ItyVkLZeuw/pub?gid=1702506345&single=true&output=csv"
 
 @st.cache_data(ttl=60)
@@ -21,7 +52,7 @@ col_tipo = buscar_col(df_all, "RUEDAS")
 col_movil = buscar_col(df_all, "MOVIL")
 col_dep = buscar_col(df_all, "DEPENDEN")
 col_dom = buscar_col(df_all, "DOMINIO")
-col_km = buscar_col(df_all, "KM ACTUAL")
+col_km_act = buscar_col(df_all, "KM ACTUAL")
 col_prox = buscar_col(df_all, "PROXIMO")
 cols_fecha = [c for c in df_all.columns if "/" in c]
 col_estado = cols_fecha[-1] if cols_fecha else None
@@ -30,67 +61,57 @@ df_autos = df_all[df_all[col_tipo].str.contains("4", na=False)] if col_tipo else
 df_motos = df_all[df_all[col_tipo].str.contains("2", na=False)] if col_tipo else df_all.tail(85)
 
 def panel(df, nombre):
-    if df.empty: return
-
-    busc = st.text_input(f"🔍 Buscar en {nombre}", placeholder="Ej: 2510, DGSV, AA123", key=f"busc_{nombre}").upper()
+    busc = st.text_input(f"🔍 Buscar {nombre}", placeholder="Ej: 2553, DGSV, RANGER", key=f"busc_{nombre}").upper()
     df_f = df.copy()
     if busc:
-        df_f = df_f[df_f.apply(lambda r: busc in str(r[col_movil]).upper() + str(r[col_dom]).upper() + str(r.to_string()).upper(), axis=1)]
-        if len(df_f) == 1:
-            r = df_f.iloc[0]
-            st.success(f"✅ {r[col_movil]} {r[col_dep]} - {r[col_dom]} - {r[col_estado]}")
-        elif len(df_f) > 1:
-            st.info(f"🔍 {len(df_f)} encontrados para: {busc} - {', '.join(df_f[col_movil].astype(str).tolist()[:10])}")
-        elif len(df_f) == 0:
-            st.warning(f"No se encontró {busc}")
+        df_f = df_f[df_f.apply(lambda r: busc in " ".join([str(x).upper() for x in r.values]), axis=1)]
+        if len(df_f)==1:
+            r=df_f.iloc[0]; st.success(f"✅ {r[col_movil]} {r[col_dep]} - DOM {r[col_dom]} - {r[col_estado] if col_estado else ''}")
 
-    if col_dep and col_dep in df.columns and not busc:
-        deps = ["TODOS"] + sorted([x for x in df[col_dep].unique() if x!=""])
-        sel = st.selectbox(f"Filtro Dependencia {nombre}", deps, key=f"dep_{nombre}")
-        if sel!="TODOS":
-            df_f = df_f[df_f[col_dep]==sel]
+    def estado_final(row):
+        v = str(row[col_estado]).upper() if col_estado else ""
+        if "QRT" in v: return "🔴 QRT"
+        if "SERVI" in v: return "🔵 SERVI"
+        if col_km_act and col_prox:
+            try:
+                km_act = int(float(str(row[col_km_act]).replace(".","").replace(",","").strip() or 0))
+                prox = int(float(str(row[col_prox]).replace(".","").replace(",","").strip() or 0))
+                if prox>0 and km_act>0:
+                    if km_act >= prox: return "🔵 SERVI"
+                    if km_act >= prox-1000: return f"🟡 ALERTA {prox}"
+            except: pass
+        if "PRECAR" in v: return "🟡 PRECARIO"
+        return "🟢 NORMAL"
 
     if col_estado and col_estado in df_f.columns:
-        def sem(v):
-            v=str(v).upper()
-            if "SERVI" in v or "TALLER" in v: return "🔵 SERVI"
-            if "QRT" in v: return "🔴 QRT"
-            if "PRECAR" in v: return "🟡 PRECARIO"
-            return "🟢 NORMAL"
-        df_f["ESTADO HOY"] = df_f[col_estado].apply(sem)
+        df_f["ESTADO HOY"] = df_f.apply(estado_final, axis=1)
 
-        c1,c2,c3,c4,c5 = st.columns(5)
-        c1.metric("Total", len(df_f))
-        c2.metric("🟢 NORMAL", len(df_f[df_f["ESTADO HOY"].str.contains("NORMAL")]))
-        c3.metric("🟡 PRECARIO", len(df_f[df_f["ESTADO HOY"].str.contains("PRECARIO")]))
-        c4.metric("🔴 QRT", len(df_f[df_f["ESTADO HOY"].str.contains("QRT")]))
-        c5.metric("🔵 SERVI", len(df_f[df_f["ESTADO HOY"].str.contains("SERVI")]))
+        qrt = len(df_f[df_f["ESTADO HOY"]=="🔴 QRT"])
+        servi = len(df_f[df_f["ESTADO HOY"]=="🔵 SERVI"])
+        alerta = len(df_f[df_f["ESTADO HOY"].str.contains("ALERTA")])
 
-        graf = df_f["ESTADO HOY"].value_counts().reset_index()
-        graf.columns=["Estado","Cantidad"]
-        chart = alt.Chart(graf).mark_bar().encode(
-            x=alt.X('Estado:N', sort=['🟢 NORMAL','🟡 PRECARIO','🔴 QRT','🔵 SERVI']),
-            y='Cantidad:Q',
-            color=alt.Color('Estado:N', scale=alt.Scale(domain=['🟢 NORMAL','🟡 PRECARIO','🔴 QRT','🔵 SERVI'], range=['#22c55e','#eab308','#ef4444','#3b82f6']), legend=None),
-            tooltip=['Estado','Cantidad']
-        )
-        st.altair_chart(chart, use_container_width=True)
+        c1,c2,c3,c4 = st.columns(4)
+        c1.markdown(f"<div style='background:#fecaca;padding:12px;border-radius:10px;text-align:center'>🔴 QRT<br><b style='font-size:26px'>{qrt}</b></div>", unsafe_allow_html=True)
+        c2.markdown(f"<div style='background:#bfdbfe;padding:12px;border-radius:10px;text-align:center'>🔵 SERVI<br><b style='font-size:26px'>{servi}</b></div>", unsafe_allow_html=True)
+        c3.markdown(f"<div style='background:#fef08a;padding:12px;border-radius:10px;text-align:center'>🟡 POR VENCER<br><b style='font-size:26px'>{alerta}</b></div>", unsafe_allow_html=True)
+        c4.metric("Total", len(df_f))
 
-        df_qrt = df_f[df_f["ESTADO HOY"].str.contains("QRT|SERVI")]
-        if not df_qrt.empty:
-            st.error(f"🔴 {len(df_qrt)} en QRT/SERVI")
-            txt_wsp = f"*PARTE QRT/SERVI - {nombre} - {col_estado}*\n\n"
-            for _, r in df_qrt.iterrows():
-                txt_wsp += f"• {r[col_movil]} {r[col_dep]} - {r[col_estado]} - {r[col_dom]}\n"
-            st.text_area("Texto listo para WhatsApp", txt_wsp, height=150, key=f"wsp_{nombre}")
-            st.download_button(f"📥 Descargar lista QRT {nombre}", txt_wsp, file_name=f"QRT_{nombre}.txt", key=f"down_{nombre}")
+        if qrt>0 or servi>0:
+            st.info(f"Resumen {nombre}: {qrt} QRT - {servi} SERVI - {alerta} por vencer (a 1000km)")
 
-    st.dataframe(df_f, use_container_width=True, height=600)
+        def pintar(fila):
+            if "QRT" in fila["ESTADO HOY"]: return ['background-color: #fecaca']*len(fila)
+            if "SERVI" in fila["ESTADO HOY"]: return ['background-color: #bfdbfe']*len(fila)
+            if "ALERTA" in fila["ESTADO HOY"]: return ['background-color: #fef9c3']*len(fila)
+            return ['']*len(fila)
 
-st.title("🚔 DGSV - Flota")
-t1, t2 = st.tabs([f"🚔 MOVILES ({len(df_autos)})", f"🏍️ MOTOS ({len(df_motos)})"])
-with t1: panel(df_autos, "MOVILES 19")
-with t2: panel(df_motos, "MOTOS 85")
-if st.button("🔄 Actualizar"):
-    st.cache_data.clear()
-    st.rerun()
+        st.dataframe(df_f.style.apply(pintar, axis=1), use_container_width=True, height=550)
+
+# Header
+c_a,c_b = st.columns([4,1])
+c_a.title(f"🚔 DGSV - {st.session_state.usuario_actual}")
+if c_b.button("Salir"): st.session_state.login=False; st.rerun()
+
+t1,t2 = st.tabs([f"🚔 4 RUEDAS ({len(df_autos)})", f"🏍️ MOTOS ({len(df_motos)})"])
+with t1: panel(df_autos, "AUTOS")
+with t2: panel(df_motos, "MOTOS")
