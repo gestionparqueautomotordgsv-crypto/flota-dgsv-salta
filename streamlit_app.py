@@ -16,11 +16,10 @@ def buscar_col(df, txt):
         if txt in c: return c
     return None
 
-# BOTON PARA FORZAR ACTUALIZACION DE FECHA
-col_tit,col_btn = st.columns([4,1])
-with col_tit: st.title("🚔 Flota DGSV - En prueba")
-with col_btn:
-    if st.button("🔄 Actualizar"):
+ct, cb = st.columns([4,1])
+with ct: st.title("🚔 Flota DGSV - En prueba")
+with cb:
+    if st.button("🔄 Actualizar fecha"):
         st.cache_data.clear()
         st.rerun()
 
@@ -28,22 +27,10 @@ df_all=cargar()
 col_tipo=buscar_col(df_all,"RUEDAS")
 col_movil=buscar_col(df_all,"MOVIL")
 col_dep=buscar_col(df_all,"DEPENDEN")
-col_dom=buscar_col(df_all,"DOMINIO")
 col_km_act=buscar_col(df_all,"KM ACTUAL")
 col_prox=buscar_col(df_all,"PROXIMO")
-
-# FECHA: busca la ULTIMA columna con "/" y que no esté vacía
 cols_fecha=[c for c in df_all.columns if "/" in c]
-col_estado = None
-if cols_fecha:
-    # ordena por fecha si puede, sino toma la última de la derecha
-    col_estado = cols_fecha[-1]
-    # Si la última está vacía para la mayoría, busca la anterior con datos
-    for c in reversed(cols_fecha):
-        if df_all[c].astype(str).str.strip().replace("", "VACIO").ne("VACIO").any():
-            if (df_all[c].astype(str).str.upper().str.contains("QRT|SERVI|PRECAR|NORMAL", na=False).any()):
-                col_estado=c
-                break
+col_estado = cols_fecha[-1] if cols_fecha else None # SIEMPRE la última a la derecha
 
 df_2r=df_all[df_all[col_tipo].str.contains("2",na=False)] if col_tipo else df_all
 df_4r=df_all[df_all[col_tipo].str.contains("4",na=False)] if col_tipo else df_all
@@ -53,23 +40,22 @@ def panel(df, nombre):
     with c1: f_movil=st.text_input("MOVIL", key=f"m_{nombre}").upper()
     with c2: f_dep=st.text_input("DEPENDENCIA", key=f"d_{nombre}").upper()
     df_f=df.copy()
-    if f_movil and col_movil:
-        df_f=df_f[df_f[col_movil].astype(str).str.upper().str.contains(f_movil,na=False)]
-    if f_dep and col_dep:
-        df_f=df_f[df_f[col_dep].astype(str).str.upper().str.contains(f_dep,na=False)]
+    if f_movil and buscar_col(df_f,"MOVIL"):
+        df_f=df_f[df_f[buscar_col(df_f,"MOVIL")].astype(str).str.upper().str.contains(f_movil,na=False)]
+    if f_dep and buscar_col(df_f,"DEPENDEN"):
+        df_f=df_f[df_f[buscar_col(df_f,"DEPENDEN")].astype(str).str.upper().str.contains(f_dep,na=False)]
 
     def estado_final(row):
-        v=str(row[col_estado]).upper() if col_estado else ""
+        v=str(row[col_estado]).upper().strip() if col_estado else ""
+        if v=="": return "NORMAL"  # VACIO = NORMAL, no precario viejo
         if "QRT" in v: return "QRT"
         if "SERVI" in v: return "SERVI"
-        # km manda sobre precario
         if col_km_act and col_prox:
             try:
                 km=int(float(str(row[col_km_act]).replace(".","").replace(",","").strip() or 0))
                 prox=int(float(str(row[col_prox]).replace(".","").replace(",","").strip() or 0))
-                if prox>0 and km>0:
-                    if km>=prox: return "SERVI"
-                    if km>=prox-1000: return "ALERTA"
+                if prox>0 and km>0 and km>=prox: return "SERVI"
+                if prox>0 and km>0 and km>=prox-1000: return "ALERTA"
             except: pass
         if "PRECAR" in v: return "PRECARIO"
         return "NORMAL"
@@ -78,34 +64,30 @@ def panel(df, nombre):
     qrt=len(df_f[df_f["ESTADO"]=="QRT"])
     servi=len(df_f[df_f["ESTADO"]=="SERVI"])
     precario=len(df_f[df_f["ESTADO"]=="PRECARIO"])
-    alerta_df=df_f[df_f["ESTADO"]=="ALERTA"]
-    normal=len(df_f[df_f["ESTADO"]=="NORMAL"])+len(alerta_df)
+    alerta=len(df_f[df_f["ESTADO"]=="ALERTA"])
+    normal=len(df_f[df_f["ESTADO"]=="NORMAL"])+alerta
 
     ca,cb,cc,cd,ce=st.columns(5)
-    ca.markdown(f"<div style='background:#ff6b6b;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🔴 QRT</b><br><span style='font-size:32px;font-weight:bold'>{qrt}</span></div>",unsafe_allow_html=True)
-    cb.markdown(f"<div style='background:#4dabf7;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🔵 SERVI</b><br><span style='font-size:32px;font-weight:bold'>{servi}</span></div>",unsafe_allow_html=True)
-    cc.markdown(f"<div style='background:#51cf66;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🟢 NORMAL</b><br><span style='font-size:32px;font-weight:bold'>{normal}</span></div>",unsafe_allow_html=True)
-    cd.markdown(f"<div style='background:#fcc419;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🟡 PRECARIO</b><br><span style='font-size:32px;font-weight:bold'>{precario}</span></div>",unsafe_allow_html=True)
-    ce.markdown(f"<div style='background:#1e293b;padding:15px;border-radius:12px;text-align:center;color:white;height:95px'><b>Total</b><br><span style='font-size:32px;font-weight:bold'>{len(df_f)}</span></div>",unsafe_allow_html=True)
-
-    if len(alerta_df)>0:
-        st.warning(f"🟡 ALERTA: {len(alerta_df)} próximos al servi - YA SUMADO EN NORMAL")
+    ca.markdown(f"<div style='background:#ff6b6b;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🔴 QRT</b><br><span style='font-size:32px'>{qrt}</span></div>",unsafe_allow_html=True)
+    cb.markdown(f"<div style='background:#4dabf7;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🔵 SERVI</b><br><span style='font-size:32px'>{servi}</span></div>",unsafe_allow_html=True)
+    cc.markdown(f"<div style='background:#51cf66;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🟢 NORMAL</b><br><span style='font-size:32px'>{normal}</span></div>",unsafe_allow_html=True)
+    cd.markdown(f"<div style='background:#fcc419;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🟡 PRECARIO</b><br><span style='font-size:32px'>{precario}</span></div>",unsafe_allow_html=True)
+    ce.markdown(f"<div style='background:#1e293b;padding:15px;border-radius:12px;text-align:center;color:white;height:95px'><b>Total</b><br><span style='font-size:32px'>{len(df_f)}</span></div>",unsafe_allow_html=True)
 
     st.divider()
     df_graf=df_f.copy()
     df_graf["GRAF"]=df_graf["ESTADO"].replace({"ALERTA":"NORMAL"})
     graf=df_graf["GRAF"].value_counts().reset_index()
     graf.columns=["Estado","Cantidad"]
-    chart=alt.Chart(graf).mark_bar(cornerRadiusEnd=8).encode(
+    chart=alt.Chart(graf).mark_bar().encode(
         x=alt.X('Estado:N', sort=["NORMAL","QRT","PRECARIO","SERVI"]),
         y='Cantidad:Q',
-        color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI"], range=["#22c55e","#ef4444","#eab308","#3b82f6"]), legend=None),
-        tooltip=["Estado","Cantidad"]
+        color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI"], range=["#22c55e","#ef4444","#eab308","#3b82f6"]), legend=None)
     ).properties(height=280)
     st.altair_chart(chart, use_container_width=True)
-    st.caption(f"Columna de estado usada: {col_estado}")
+    st.caption(f"Usando columna: {col_estado}")
     st.dataframe(df_f, use_container_width=True, height=600)
 
 t1,t2=st.tabs([f"🏍️ DOS RUEDAS ({len(df_2r)})", f"🚔 CUATRO RUEDAS ({len(df_4r)})"])
-with t1: panel(df_2r, "2R")
-with t2: panel(df_4r, "4R")
+with t1: panel(df_2r,"2R")
+with t2: panel(df_4r,"4R")
