@@ -50,23 +50,17 @@ def panel(df, nombre):
 
     def estado_final(row):
         v=str(row[col_estado]).upper() if col_estado else ""
-        if "QRT" in v:
-            return "QRT"
-        if "SERVI" in v:
-            return "SERVI"
+        if "QRT" in v: return "QRT"
+        if "SERVI" in v: return "SERVI"
         if col_km_act and col_prox:
             try:
                 km=int(float(str(row[col_km_act]).replace(".","").replace(",","").strip() or 0))
                 prox=int(float(str(row[col_prox]).replace(".","").replace(",","").strip() or 0))
                 if prox>0 and km>0:
-                    if km>=prox:
-                        return "SERVI"
-                    if km>=prox-1000:
-                        return "ALERTA"
-            except:
-                pass
-        if "PRECAR" in v:
-            return "PRECARIO"
+                    if km>=prox: return "SERVI"
+                    if km>=prox-1000: return "ALERTA"
+            except: pass
+        if "PRECAR" in v: return "PRECARIO"
         return "NORMAL"
 
     df_f["ESTADO"]=df_f.apply(estado_final, axis=1)
@@ -75,22 +69,20 @@ def panel(df, nombre):
     servi=len(df_f[df_f["ESTADO"]=="SERVI"])
     precario=len(df_f[df_f["ESTADO"]=="PRECARIO"])
     alerta_df=df_f[df_f["ESTADO"]=="ALERTA"]
-    normal_base=len(df_f[df_f["ESTADO"]=="NORMAL"])
-    normal=normal_base+len(alerta_df)
+    normal=len(df_f[df_f["ESTADO"]=="NORMAL"])+len(alerta_df)
 
-    ca,cb,cc,cd=st.columns(4)
-    ca.markdown(f"<div style='background:#ff6b6b;padding:15px;border-radius:12px;text-align:center'><b>🔴 QRT</b><br><span style='font-size:32px'>{qrt}</span></div>",unsafe_allow_html=True)
-    cb.markdown(f"<div style='background:#4dabf7;padding:15px;border-radius:12px;text-align:center'><b>🔵 SERVI</b><br><span style='font-size:32px'>{servi}</span></div>",unsafe_allow_html=True)
-    cc.markdown(f"<div style='background:#51cf66;padding:15px;border-radius:12px;text-align:center'><b>🟢 NORMAL</b><br><span style='font-size:32px'>{normal}</span></div>",unsafe_allow_html=True)
-    cd.markdown(f"<div style='background:#1e293b;padding:15px;border-radius:12px;text-align:center;color:white'><b>Total</b><br><span style='font-size:32px'>{len(df_f)}</span></div>",unsafe_allow_html=True)
-
-    if precario>0:
-        st.markdown(f"<div style='background:#fcc419;padding:10px;border-radius:10px;text-align:center;margin-top:10px'><b>🟡 PRECARIO: {precario} - suma al total</b></div>",unsafe_allow_html=True)
+    # 5 CUADROS IGUALES AHORA
+    ca,cb,cc,cd,ce=st.columns(5)
+    ca.markdown(f"<div style='background:#ff6b6b;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🔴 QRT</b><br><span style='font-size:32px;font-weight:bold'>{qrt}</span></div>",unsafe_allow_html=True)
+    cb.markdown(f"<div style='background:#4dabf7;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🔵 SERVI</b><br><span style='font-size:32px;font-weight:bold'>{servi}</span></div>",unsafe_allow_html=True)
+    cc.markdown(f"<div style='background:#51cf66;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🟢 NORMAL</b><br><span style='font-size:32px;font-weight:bold'>{normal}</span></div>",unsafe_allow_html=True)
+    cd.markdown(f"<div style='background:#fcc419;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🟡 PRECARIO</b><br><span style='font-size:32px;font-weight:bold'>{precario}</span></div>",unsafe_allow_html=True)
+    ce.markdown(f"<div style='background:#1e293b;padding:15px;border-radius:12px;text-align:center;color:white;height:95px'><b>Total</b><br><span style='font-size:32px;font-weight:bold'>{len(df_f)}</span></div>",unsafe_allow_html=True)
 
     if len(alerta_df)>0:
         st.warning(f"🟡 ALERTA AMARILLA: {len(alerta_df)} próximos al servi (1000km antes) - YA SUMADO EN NORMAL")
         for _, r in alerta_df.iterrows():
-            st.write(f"⚠️ {r[col_movil]} - {r[col_km_act]}km / Toca {r[col_prox]}km - {r[col_dom]} - {r[col_dep]}")
+            st.write(f"⚠️ {r[col_movil]} - {r[col_km_act]}km / Toca {r[col_prox]}km - {r[col_dom]}")
 
     df_graf=df_f.copy()
     df_graf["GRAF"]=df_graf["ESTADO"].replace({"ALERTA":"NORMAL"})
@@ -107,8 +99,6 @@ def panel(df, nombre):
 st.title("🚔 Flota DGSV - En prueba")
 t1,t2=st.tabs([f"🏍️ DOS RUEDAS ({len(df_2r)})", f"🚔 CUATRO RUEDAS ({len(df_4r)})"])
 with t1:
-    st.subheader("🔍 Filtros DOS RUEDAS")
     panel(df_2r, "2R")
 with t2:
-    st.subheader("🔍 Filtros CUATRO RUEDAS")
     panel(df_4r, "4R")
