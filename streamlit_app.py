@@ -31,7 +31,6 @@ col_dom=buscar_col(df_all,"DOMINIO")
 col_km_act=buscar_col(df_all,"KM ACTUAL")
 col_prox=buscar_col(df_all,"PROXIMO")
 cols_fecha=[c for c in df_all.columns if "/" in c]
-col_estado = cols_fecha[-1] if cols_fecha else None
 
 df_2r=df_all[df_all[col_tipo].str.contains("2",na=False)] if col_tipo else df_all
 df_4r=df_all[df_all[col_tipo].str.contains("4",na=False)] if col_tipo else df_all
@@ -46,11 +45,19 @@ def panel(df, nombre):
     if f_dep and buscar_col(df_f,"DEPENDEN"):
         df_f=df_f[df_f[buscar_col(df_f,"DEPENDEN")].astype(str).str.upper().str.contains(f_dep,na=False)]
 
+    def get_estado_diario(row):
+        # Busca de derecha a izquierda la ultima fecha con dato - asi hereda el dia anterior
+        for c in reversed(cols_fecha):
+            v=str(row[c]).strip()
+            if v!="" and v.upper()!="NAN" and v!="0":
+                return v
+        return "NORMAL"
+
     def estado_final(row):
-        v=str(row[col_estado]).upper().strip() if col_estado else ""
+        v=get_estado_diario(row).upper()
         if "QRT" in v: return "QRT"
         if "SERVI" in v: return "SERVI"
-        if "PRECAR" in v: return "PRECARIO" # PRECARIO antes que km
+        if "PRECAR" in v: return "PRECARIO"
         if col_km_act and col_prox:
             try:
                 km=int(float(str(row[col_km_act]).replace(".","").replace(",","").strip() or 0))
@@ -61,12 +68,11 @@ def panel(df, nombre):
         return "NORMAL"
 
     df_f["ESTADO"]=df_f.apply(estado_final, axis=1)
-    
     qrt=len(df_f[df_f["ESTADO"]=="QRT"])
     servi=len(df_f[df_f["ESTADO"]=="SERVI"])
     precario=len(df_f[df_f["ESTADO"]=="PRECARIO"])
     alerta_df=df_f[df_f["ESTADO"]=="ALERTA"]
-    normal=len(df_f[df_f["ESTADO"]=="NORMAL"]) + len(alerta_df) # NORMAL incluye la alerta por km
+    normal=len(df_f[df_f["ESTADO"]=="NORMAL"]) + len(alerta_df) # NORMAL incluye alerta km
 
     ca,cb,cc,cd,ce=st.columns(5)
     ca.markdown(f"<div style='background:#ff6b6b;padding:15px;border-radius:12px;text-align:center;height:95px'><b>🔴 QRT</b><br><span style='font-size:32px'>{qrt}</span></div>",unsafe_allow_html=True)
@@ -76,9 +82,9 @@ def panel(df, nombre):
     ce.markdown(f"<div style='background:#1e293b;padding:15px;border-radius:12px;text-align:center;color:white;height:95px'><b>Total</b><br><span style='font-size:32px'>{len(df_f)}</span></div>",unsafe_allow_html=True)
 
     if len(alerta_df)>0:
-        st.warning(f"🟡 ALERTA por KM: {len(alerta_df)} próximos al servi - ESTAN DENTRO DE NORMAL")
+        st.warning(f"🟡 ALERTA KM: {len(alerta_df)} próximos al servi - DENTRO DE NORMAL")
         for _, r in alerta_df.iterrows():
-            st.write(f"⚠️ {r[col_movil]} - {r[col_km_act]}km / Toca {r[col_prox]}km - {r[col_dom]}")
+            st.write(f"⚠️ {r[col_movil]} - {r[col_km_act]}km / Toca {r[col_prox]}km")
 
     st.divider()
     df_graf=df_f.copy()
@@ -91,6 +97,7 @@ def panel(df, nombre):
         color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI"], range=["#22c55e","#ef4444","#eab308","#3b82f6"]), legend=None)
     ).properties(height=280)
     st.altair_chart(chart, use_container_width=True)
+    st.caption(f"Fechas detectadas: {', '.join(cols_fecha[-3:])} - Usando última con dato")
     st.dataframe(df_f, use_container_width=True, height=600)
 
 t1,t2=st.tabs([f"🏍️ DOS RUEDAS ({len(df_2r)})", f"🚔 CUATRO RUEDAS ({len(df_4r)})"])
