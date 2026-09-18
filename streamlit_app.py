@@ -31,7 +31,7 @@ cols_fecha=[c for c in df_all.columns if "/" in c]
 df_2r=df_all[df_all[col_tipo].str.contains("2",na=False)] if col_tipo else df_all
 df_4r=df_all[df_all[col_tipo].str.contains("4",na=False)] if col_tipo else df_all
 
-def panel(df, nombre):
+def panel(df, nombre, mostrar_azul=True):
     df_f=df.copy()
 
     def get_estado_diario(row):
@@ -70,7 +70,7 @@ def panel(df, nombre):
     cd.markdown(f"<div style='background:#fcc419;padding:15px;border-radius:12px;text-align:center'><b>🟡 PRECARIO</b><br><span style='font-size:30px'>{precario}</span></div>",unsafe_allow_html=True)
     ce.markdown(f"<div style='background:#1e293b;color:white;padding:15px;border-radius:12px;text-align:center'><b>Total</b><br><span style='font-size:30px'>{len(df_f)}</span></div>",unsafe_allow_html=True)
 
-    # --- NOTIFICACION CON TRIANGULO Y KM ---
+    # ALERTAS
     if alerta>0:
         st.markdown(f"""
         <div style='background:#fff3cd;border:1px solid #ffe69c;padding:12px;border-radius:8px;margin-top:15px;color:#664d03;font-size:16px'>
@@ -78,19 +78,18 @@ def panel(df, nombre):
         </div>
         """, unsafe_allow_html=True)
         for _, r in alerta_df.iterrows():
-            movil=str(r[col_movil]) if col_movil else "MOVIL"
-            km=str(r[col_km_act]) if col_km_act else "0"
-            prox=str(r[col_prox]) if col_prox else "0"
+            movil=str(r[col_movil])
+            km=str(r[col_km_act])
+            prox=str(r[col_prox])
+            st.markdown(f"<div style='margin-top:10px;font-size:16px'>⚠️ <b>{movil} - {km}km / Toca {prox}km</b></div>", unsafe_allow_html=True)
+
+        # SOLO EN DOS RUEDAS MUESTRA LA AZUL
+        if mostrar_azul:
             st.markdown(f"""
-            <div style='margin-top:10px;font-size:16px'>
-            ⚠️ <b>{movil} - {km}km / Toca {prox}km</b>
+            <div style='margin-top:10px;padding:8px;background:#e2e3e5;border-radius:6px'>
+            🔵 <b>ALERTA PARA SERVI: {alerta} móviles con alerta de km</b>
             </div>
             """, unsafe_allow_html=True)
-        st.markdown(f"""
-        <div style='margin-top:10px;padding:8px;background:#e2e3e5;border-radius:6px'>
-        🔵 <b>ALERTA PARA SERVI: {alerta} móviles</b> con alerta de km
-        </div>
-        """, unsafe_allow_html=True)
 
     st.divider()
     graf=df_f["ESTADO"].replace({"ALERTA":"NORMAL"}).value_counts().reset_index()
@@ -104,5 +103,5 @@ def panel(df, nombre):
     st.dataframe(df_f, use_container_width=True)
 
 t1,t2=st.tabs([f"🏍️ DOS RUEDAS ({len(df_2r)})", f"🚔 CUATRO RUEDAS ({len(df_4r)})"])
-with t1: panel(df_2r,"2R")
-with t2: panel(df_4r,"4R")
+with t1: panel(df_2r,"2R", mostrar_azul=True) # CON AZUL
+with t2: panel(df_4r,"4R", mostrar_azul=False) # SIN AZUL
