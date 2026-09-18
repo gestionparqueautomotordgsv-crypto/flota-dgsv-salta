@@ -1,17 +1,48 @@
-def panel(df, nombre):
-    st.markdown(f"#### 🔍 Filtros {nombre}")
-    c_b1, c_b2 = st.columns(2)
-    with c_b1:
-        f_movil = st.text_input(f"MOVIL", placeholder="Ej: 2363, 2553", key=f"mov_{nombre}").upper()
-    with c_b2:
-        f_dep = st.text_input(f"DEPENDENCIA", placeholder="Ej: VIAL, DGSV", key=f"dep_{nombre}").upper()
+import streamlit as st
+import pandas as pd
+import altair as alt
 
-    df_f = df.copy()
-    
-    if f_movil:
-        df_f = df_f[df_f[col_movil].astype(str).str.upper().str.contains(f_movil, na=False)]
-    if f_dep:
-        df_f = df_f[df_f[col_dep].astype(str).str.upper().str.contains(f_dep, na=False)]
+st.set_page_config(page_title="DGSV - Flota", layout="wide", page_icon="🚔")
+
+URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRO9kumGN6YMvBI_hGc-D9Lb8y29RqNubvkIN1gpgN6I8QKjZ2QBNQ3ItyVkLZeuw/pub?gid=1702506345&single=true&output=csv"
+
+@st.cache_data(ttl=60)
+def cargar():
+    df=pd.read_csv(URL, dtype=str).fillna("")
+    df.columns=[c.strip().upper() for c in df.columns]
+    return df
+
+def buscar_col(df, txt):
+    for c in df.columns:
+        if txt in c: return c
+    return None
+
+df_all=cargar()
+col_tipo=buscar_col(df_all,"RUEDAS")
+col_movil=buscar_col(df_all,"MOVIL")
+col_dep=buscar_col(df_all,"DEPENDEN")
+col_dom=buscar_col(df_all,"DOMINIO")
+col_km_act=buscar_col(df_all,"KM ACTUAL")
+col_prox=buscar_col(df_all,"PROXIMO")
+cols_fecha=[c for c in df_all.columns if "/" in c]
+col_estado=cols_fecha[-1] if cols_fecha else None
+
+df_motos=df_all[df_all[col_tipo].str.contains("2", na=False)] if col_tipo else df_all
+df_autos=df_all[df_all[col_tipo].str.contains("4", na=False)] if col_tipo else df_all
+
+def panel(df, nombre):
+    st.markdown(f"### 🔍 Filtros {nombre}")
+    c1,c2=st.columns(2)
+    with c1:
+        f_movil=st.text_input("MOVIL", placeholder="Ej: 2363", key=f"m_{nombre}").upper()
+    with c2:
+        f_dep=st.text_input("DEPENDENCIA", placeholder="Ej: VIAL, DGSV", key=f"d_{nombre}").upper()
+
+    df_f=df.copy()
+    if f_movil and col_movil:
+        df_f=df_f[df_f[col_movil].astype(str).str.upper().str.contains(f_movil, na=False)]
+    if f_dep and col_dep:
+        df_f=df_f[df_f[col_dep].astype(str).str.upper().str.contains(f_dep, na=False)]
 
     def estado_final(row):
         v=str(row[col_estado]).upper() if col_estado else ""
@@ -28,44 +59,46 @@ def panel(df, nombre):
         if "PRECAR" in v: return "PRECARIO"
         return "NORMAL"
 
-    df_f["ESTADO HOY"]=df_f.apply(estado_final, axis=1)
+    df_f["ESTADO"]=df_f.apply(estado_final, axis=1)
 
-    qrt=len(df_f[df_f["ESTADO HOY"]=="QRT"])
-    servi=len(df_f[df_f["ESTADO HOY"]=="SERVI"])
-    normal=len(df_f[df_f["ESTADO HOY"]=="NORMAL"])
-    alerta_df=df_f[df_f["ESTADO HOY"]=="ALERTA"]
+    qrt=len(df_f[df_f["ESTADO"]=="QRT"])
+    servi=len(df_f[df_f["ESTADO"]=="SERVI"])
+    normal=len(df_f[df_f["ESTADO"]=="NORMAL"])
+    alerta_df=df_f[df_f["ESTADO"]=="ALERTA"]
 
-    # RESUMEN QUE SI SE VE
-    c1,c2,c3,c4=st.columns(4)
-    c1.markdown(f"<div style='background:#ef4444;padding:12px;border-radius:10px;text-align:center'><span style='color:white;font-weight:bold'>🔴 QRT</span><br><span style='color:white;font-size:34px;font-weight:bold'>{qrt}</span></div>", unsafe_allow_html=True)
-    c2.markdown(f"<div style='background:#3b82f6;padding:12px;border-radius:10px;text-align:center'><span style='color:white;font-weight:bold'>🔵 SERVI</span><br><span style='color:white;font-size:34px;font-weight:bold'>{servi}</span></div>", unsafe_allow_html=True)
-    c3.markdown(f"<div style='background:#22c55e;padding:12px;border-radius:10px;text-align:center'><span style='color:white;font-weight:bold'>🟢 NORMAL</span><br><span style='color:white;font-size:34px;font-weight:bold'>{normal}</span></div>", unsafe_allow_html=True)
-    c4.markdown(f"<div style='background:#f1f5f9;padding:12px;border-radius:10px;text-align:center'><span style='color:#334155;font-weight:bold'>Total filtrado</span><br><span style='color:#334155;font-size:34px;font-weight:bold'>{len(df_f)}</span></div>", unsafe_allow_html=True)
+    # RESUMEN VISIBLE
+    ca,cb,cc,cd=st.columns(4)
+    ca.markdown(f"<div style='background:#ef4444;padding:12px;border-radius:10px;text-align:center;color:white'><b>🔴 QRT</b><br><span style='font-size:32px;font-weight:bold'>{qrt}</span></div>", unsafe_allow_html=True)
+    cb.markdown(f"<div style='background:#3b82f6;padding:12px;border-radius:10px;text-align:center;color:white'><b>🔵 SERVI</b><br><span style='font-size:32px;font-weight:bold'>{servi}</span></div>", unsafe_allow_html=True)
+    cc.markdown(f"<div style='background:#22c55e;padding:12px;border-radius:10px;text-align:center;color:white'><b>🟢 NORMAL</b><br><span style='font-size:32px;font-weight:bold'>{normal}</span></div>", unsafe_allow_html=True)
+    cd.markdown(f"<div style='background:#e2e8f0;padding:12px;border-radius:10px;text-align:center'><b>Total</b><br><span style='font-size:32px;font-weight:bold'>{len(df_f)}</span></div>", unsafe_allow_html=True)
 
-    # CUENTA POR DEPENDENCIA
-    if len(df_f)>0:
-        st.caption(f"Mostrando {len(df_f)} motos de {nombre}")
-        conteo_dep = df_f[col_dep].value_counts().reset_index()
-        conteo_dep.columns=["Dependencia","Cantidad"]
-        if len(conteo_dep)>1:
-            st.dataframe(conteo_dep, use_container_width=True, height=150)
-
-    st.write("")
     if len(alerta_df)>0:
-        st.markdown(f"<div style='background:#fef08a;border-left:6px solid #eab308;padding:10px;border-radius:8px'><b>🟡 ALERTA: {len(alerta_df)} próximos al servi</b></div>", unsafe_allow_html=True)
+        st.warning(f"🟡 ALERTA AMARILLA: {len(alerta_df)} próximos al servi (1000km antes)")
         for _, r in alerta_df.iterrows():
-            st.info(f"⚠️ {r[col_movil]} - {r[col_km_act]}km / Toca {r[col_prox]}km - {r[col_dom]} - {r[col_dep]}")
+            st.write(f"⚠️ **{r[col_movil]}** - {r[col_km_act]}km / Toca {r[col_prox]}km - {r[col_dom]} - {r[col_dep]}")
 
-    # GRAFICO
+    # GRAFICO: NORMAL VERDE, QRT ROJO, PRECARIO AMARILLO, SERVI AZUL (sin alerta)
     df_graf=df_f.copy()
-    df_graf["GRAFICO"]=df_graf["ESTADO HOY"].replace({"ALERTA":"NORMAL"})
-    graf=df_graf["GRAFICO"].value_counts().reset_index()
+    df_graf["GRAF"]=df_graf["ESTADO"].replace({"ALERTA":"NORMAL"})
+    graf=df_graf["GRAF"].value_counts().reset_index()
     graf.columns=["Estado","Cantidad"]
     chart=alt.Chart(graf).mark_bar().encode(
         x=alt.X('Estado:N', sort=["NORMAL","QRT","PRECARIO","SERVI"]),
         y='Cantidad:Q',
-        color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI"], range=["#22c55e","#ef4444","#eab308","#3b82f6"]), legend=None)
+        color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI"], range=["#22c55e","#ef4444","#eab308","#3b82f6"]), legend=None),
+        tooltip=["Estado","Cantidad"]
     )
     st.altair_chart(chart, use_container_width=True)
 
+    # TABLA CON CONTEO POR DEPENDENCIA SI FILTRA
+    if f_dep:
+        st.info(f"Filtrando por {f_dep}: {len(df_f)} motos encontradas")
+    
     st.dataframe(df_f, use_container_width=True, height=600)
+
+st.title("🚔 Flota DGSV - En prueba")
+
+t1,t2=st.tabs([f"🏍️ MOTOS ({len(df_motos)})", f"🚔 AUTOS ({len(df_autos)})"])
+with t1: panel(df_motos, "MOTOS")
+with t2: panel(df_autos, "AUTOS")
