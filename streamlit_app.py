@@ -50,21 +50,30 @@ def panel(df, nombre):
     if col_estado and col_estado in df_f.columns:
         def sem(v):
             v=str(v).upper()
-            if "QRT" in v or "SERVI" in v: return "🔴 QRT"
-            if "PRECAR" in v: return "🟡 PRECARIO"
+            if "SERVI" in v or "TALLER" in v: 
+                return "🔵 SERVI"
+            if "QRT" in v: 
+                return "🔴 QRT"
+            if "PRECAR" in v: 
+                return "🟡 PRECARIO"
             return "🟢 NORMAL"
+
         df_f["ESTADO HOY"] = df_f[col_estado].apply(sem)
-        c1,c2,c3,c4 = st.columns(4)
+        
+        c1,c2,c3,c4,c5 = st.columns(5)
         c1.metric("Total", len(df_f))
         c2.metric("🟢 NORMAL", len(df_f[df_f["ESTADO HOY"].str.contains("NORMAL")]))
         c3.metric("🟡 PRECARIO", len(df_f[df_f["ESTADO HOY"].str.contains("PRECARIO")]))
         c4.metric("🔴 QRT", len(df_f[df_f["ESTADO HOY"].str.contains("QRT")]))
+        c5.metric("🔵 SERVI", len(df_f[df_f["ESTADO HOY"].str.contains("SERVI")]))
+
         graf = df_f["ESTADO HOY"].value_counts().reset_index()
         graf.columns=["Estado","Cantidad"]
         chart = alt.Chart(graf).mark_bar().encode(
-            x=alt.X('Estado:N', sort=['🟢 NORMAL','🟡 PRECARIO','🔴 QRT']),
+            x=alt.X('Estado:N', sort=['🟢 NORMAL','🟡 PRECARIO','🔴 QRT','🔵 SERVI']),
             y='Cantidad:Q',
-            color=alt.Color('Estado:N', scale=alt.Scale(domain=['🟢 NORMAL','🟡 PRECARIO','🔴 QRT'], range=['#22c55e','#eab308','#ef4444']), legend=None)
+            color=alt.Color('Estado:N', scale=alt.Scale(domain=['🟢 NORMAL','🟡 PRECARIO','🔴 QRT','🔵 SERVI'], range=['#22c55e','#eab308','#ef4444','#3b82f6']), legend=None),
+            tooltip=['Estado','Cantidad']
         )
         st.altair_chart(chart, use_container_width=True)
 
@@ -75,7 +84,7 @@ def panel(df, nombre):
             st.dataframe(df_a[[col_movil, col_dep, col_km, col_prox, "FALTAN KM", "ALERTA"]].sort_values("FALTAN KM"), use_container_width=True, hide_index=True)
 
     st.divider()
-    st.caption(f"Todas las fechas visibles - {nombre} - Último: {col_estado}")
+    st.caption(f"Todas las fechas visibles - {nombre} - Último parte: {col_estado}")
     st.dataframe(df_f, use_container_width=True, height=650)
 
 st.title("🚔 DGSV - Flota")
