@@ -44,11 +44,6 @@ df_2r=df_all[df_all[col_tipo].str.contains("2",na=False)] if col_tipo else df_al
 df_4r=df_all[df_all[col_tipo].str.contains("4",na=False)] if col_tipo else df_all
 
 def calcular_estado(row):
-    movil=str(row[col_movil]) if col_movil else ""
-    # FORZAR ALERTA DEL 2378 PARA QUE APAREZCA EN 4 RUEDAS
-    if "2378" in movil:
-        return "ALERTA"
-
     v_diario="NORMAL"
     for c in reversed(cols_fecha):
         v=str(row[c]).strip()
@@ -65,6 +60,14 @@ def calcular_estado(row):
         if prox>0 and km>0 and km>=prox-1000:
             return "ALERTA"
     return "NORMAL"
+
+# AVISO GLOBAL DE 1000KM
+df_all["ESTADO_TEMP"]=df_all.apply(calcular_estado, axis=1)
+alertas_globales=df_all[df_all["ESTADO_TEMP"]=="ALERTA"]
+if len(alertas_globales)>0:
+    st.toast(f"🟡 {len(alertas_globales)} móviles a 1000km del servi", icon="⚠️")
+    lista = ", ".join([f"{r[col_movil]} ({num(r[col_km_act])}/{num(r[col_prox])}km)" for _, r in alertas_globales.iterrows() if col_movil])
+    st.markdown(f"<div style='background:#dc3545;color:white;padding:12px;border-radius:8px;text-align:center;font-size:18px'>🚨 <b>ATENCIÓN: {len(alertas_globales)} MÓVILES A 1000KM DEL SERVI -> {lista}</b></div>", unsafe_allow_html=True)
 
 def panel(df_base, tipo_rueda):
     df_base_calc = df_base.copy()
@@ -97,17 +100,17 @@ def panel(df_base, tipo_rueda):
     cd.markdown(f"<div style='background:#fcc419;padding:15px;border-radius:12px;text-align:center'><b>🟡 PRECARIO</b><br><span style='font-size:30px'>{precario}</span></div>",unsafe_allow_html=True)
     ce.markdown(f"<div style='background:#1e293b;color:white;padding:15px;border-radius:12px;text-align:center'><b>Total {tipo_rueda}</b><br><span style='font-size:30px'>{len(df_f)}</span></div>",unsafe_allow_html=True)
 
-    # ESTA ES LA ALERTA AMARILLA EN 4 RUEDAS
     if len(alerta_total_df)>0:
-        st.markdown(f"<div style='background:#fff3cd;border:2px solid #ffc107;padding:12px;border-radius:8px;margin-top:15px;color:#664d03;font-size:17px'>🟡 <b>ALERTA KM {tipo_rueda}: {len(alerta_total_df)} próximos al servi - DENTRO DE NORMAL</b></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background:#fff3cd;border:2px solid #ffc107;padding:12px;border-radius:8px;margin-top:15px;color:#664d03;font-size:17px'>🟡 <b>ALERTA KM {tipo_rueda}: {len(alerta_total_df)} próximos al servi - FALTAN 1000KM O MENOS - DENTRO DE NORMAL</b></div>", unsafe_allow_html=True)
         for _, r in alerta_total_df.iterrows():
             movil=str(r[col_movil]) if col_movil else ""
-            km=str(r[col_km_act]) if col_km_act else ""
-            prox=str(r[col_prox]) if col_prox else ""
+            km=num(r[col_km_act])
+            prox=num(r[col_prox])
+            falta=prox-km
             dep=str(r[col_dep]) if col_dep else ""
-            st.markdown(f"⚠️ **{movil} - {km}km / Toca {prox}km - {dep} - {tipo_rueda}**")
+            st.markdown(f"⚠️ **{movil} - {km}km / Toca {prox}km (FALTAN {falta}km) - {dep} - {tipo_rueda}**")
     else:
-        st.warning(f"No hay alertas de KM en {tipo_rueda} por ahora - Revisar columna {col_prox}")
+        st.success(f"✅ Sin alertas de KM en {tipo_rueda}")
 
     st.divider()
     graf=df_f["ESTADO"].replace({"ALERTA":"NORMAL"}).value_counts().reset_index()
