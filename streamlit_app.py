@@ -28,7 +28,6 @@ def num(s):
         return 0
 
 def ultima_fecha_estado(row, cols_fecha):
-    # Devuelve la ultima fecha con dato y su estado
     for c in reversed(cols_fecha):
         v=str(row[c]).strip()
         if v!="" and v.upper()!="NAN":
@@ -46,6 +45,7 @@ col_movil=buscar_col(df_all,["MOVIL"])
 col_km_act=buscar_col(df_all,["KM ACTUAL","KILOMETRAJE"])
 col_prox=buscar_col(df_all,["PROXIMO"])
 col_dep=buscar_col(df_all,["DEPENDENCIA","DESTINO","UNIDAD"])
+col_siga=buscar_col(df_all,["SIGA","EXPTE"])
 cols_fecha=[c for c in df_all.columns if "/" in c]
 
 df_2r=df_all[df_all[col_tipo].str.contains("2",na=False)] if col_tipo else df_all
@@ -80,13 +80,12 @@ def panel(df_base, tipo_rueda):
     df_base_calc["ESTADO"] = df_base_calc.apply(calcular_estado, axis=1)
     alerta_total_df = df_base_calc[df_base_calc["ESTADO"]=="ALERTA"]
 
-    # CONTEOS
     qrt_c=len(df_base_calc[df_base_calc["ESTADO"]=="QRT"])
     servi_c=len(df_base_calc[df_base_calc["ESTADO"]=="SERVI"])
     precario_c=len(df_base_calc[df_base_calc["ESTADO"]=="PRECARIO"])
     normal_c=len(df_base_calc[df_base_calc["ESTADO"]=="NORMAL"]) + len(df_base_calc[df_base_calc["ESTADO"]=="ALERTA"])
 
-    # BOTONERA CON COLORES
+    # BOTONERA
     ca,cb,cc,cd,ce=st.columns(5)
     with ca:
         if st.button(f"🔴 QRT\n{qrt_c}", key=f"qrt_{tipo_rueda}", use_container_width=True):
@@ -105,59 +104,43 @@ def panel(df_base, tipo_rueda):
             st.session_state[key_filtro]="TODOS"
 
     filtro=st.session_state[key_filtro]
-    if filtro!="TODOS":
-        st.info(f"Mostrando solo **{filtro}** en {tipo_rueda} - Tocá TOTAL para volver")
 
     c1,c2 = st.columns(2)
     with c1:
-        busca_movil = st.text_input(f"🔍 Buscar MOVIL en {tipo_rueda} (ej: 1318 / 2378)", key=f"mov_{tipo_rueda}")
+        busca_movil = st.text_input(f"🔍 Buscar MOVIL en {tipo_rueda}", key=f"mov_{tipo_rueda}")
     with c2:
         deps = ["TODAS"] + sorted([x for x in df_base[col_dep].unique() if str(x).strip()!=""]) if col_dep and col_dep in df_base else ["TODAS"]
         busca_dep = st.selectbox(f"🏢 DEPENDENCIA en {tipo_rueda}", deps, key=f"dep_{tipo_rueda}")
 
     df_f = df_base.copy()
     df_f["ESTADO"]=df_f.apply(calcular_estado, axis=1)
-
-    # FILTRO BOTONERA
-    if filtro=="QRT":
-        df_f=df_f[df_f["ESTADO"]=="QRT"]
-    elif filtro=="SERVI":
-        df_f=df_f[df_f["ESTADO"]=="SERVI"]
-    elif filtro=="PRECARIO":
-        df_f=df_f[df_f["ESTADO"]=="PRECARIO"]
-    elif filtro=="NORMAL":
-        df_f=df_f[df_f["ESTADO"].isin(["NORMAL","ALERTA"])]
-
-    if busca_movil and col_movil:
-        df_f = df_f[df_f[col_movil].astype(str).str.contains(busca_movil, na=False)]
-    if busca_dep!="TODAS" and col_dep and col_dep in df_f:
-        df_f = df_f[df_f[col_dep]==busca_dep]
+    if filtro=="QRT": df_f=df_f[df_f["ESTADO"]=="QRT"]
+    elif filtro=="SERVI": df_f=df_f[df_f["ESTADO"]=="SERVI"]
+    elif filtro=="PRECARIO": df_f=df_f[df_f["ESTADO"]=="PRECARIO"]
+    elif filtro=="NORMAL": df_f=df_f[df_f["ESTADO"].isin(["NORMAL","ALERTA"])]
+    if busca_movil and col_movil: df_f = df_f[df_f[col_movil].astype(str).str.contains(busca_movil, na=False)]
+    if busca_dep!="TODAS" and col_dep and col_dep in df_f: df_f = df_f[df_f[col_dep]==busca_dep]
 
     if len(alerta_total_df)>0:
-        st.markdown(f"<div style='background:#fff3cd;border:2px solid #ffc107;padding:12px;border-radius:8px;margin-top:15px;color:#664d03;font-size:17px'>🟡 <b>ALERTA KM {tipo_rueda}: {len(alerta_total_df)} próximos al servi - DENTRO DE NORMAL</b></div>", unsafe_allow_html=True)
-        for _, r in alerta_total_df.iterrows():
-            movil=str(r[col_movil]) if col_movil else ""
-            km=str(r[col_km_act]) if col_km_act else ""
-            prox=str(r[col_prox]) if col_prox else ""
-            dep=str(r[col_dep]) if col_dep else ""
-            st.markdown(f"⚠️ **{movil} - {km}km / Toca {prox}km - {dep} - {tipo_rueda}**")
-    else:
-        st.warning(f"No hay alertas de KM en {tipo_rueda} por ahora - Revisar columna {col_prox}")
+        st.markdown(f"<div style='background:#fff3cd;border:2px solid #ffc107;padding:12px;border-radius:8px;margin-top:15px;color:#664d03;font-size:17px'>🟡 <b>ALERTA KM {tipo_rueda}: {len(alerta_total_df)} próximos al servi</b></div>", unsafe_allow_html=True)
 
     st.divider()
 
-    # SI HAY FILTRO, MOSTRAR SOLO ULTIMA FECHA + ESTADO
-    if filtro!="TODOS":
-        st.write(f"### 📋 {filtro} - Última fecha y estado en {tipo_rueda}")
+    # ACA ESTA LO QUE ME PEDIS - PARA TODOS LOS FILTROS
+    if filtro in ["QRT","NORMAL","SERVI","PRECARIO"]:
+        st.write(f"### 📋 {filtro} - {tipo_rueda} con última fecha y SIGA")
         lista=[]
         for _, r in df_f.iterrows():
             fecha, estado_fecha = ultima_fecha_estado(r, cols_fecha)
+            siga_val = str(r[col_siga]).strip() if col_siga and col_siga in r else ""
+            if siga_val=="" or siga_val.upper()=="NAN":
+                siga_val="SIN EXPTE"
             lista.append({
                 "MOVIL": r[col_movil] if col_movil else "",
                 "ULTIMA FECHA": fecha,
-                "ESTADO EN ESA FECHA": estado_fecha,
-                "ESTADO ACTUAL": r["ESTADO"],
-                "DEPENDENCIA": r[col_dep] if col_dep else ""
+                "ESTADO": estado_fecha,
+                "DEPENDENCIA": r[col_dep] if col_dep else "",
+                "SIGA N° EXPTE": siga_val
             })
         st.dataframe(pd.DataFrame(lista), use_container_width=True)
     else:
@@ -174,7 +157,5 @@ def panel(df_base, tipo_rueda):
         st.altair_chart(chart, use_container_width=True)
 
 t1,t2=st.tabs([f"🏍️ DOS RUEDAS ({len(df_2r)})", f"🚔 CUATRO RUEDAS ({len(df_4r)})"])
-with t1:
-    panel(df_2r, "2 RUEDAS")
-with t2:
-    panel(df_4r, "4 RUEDAS")
+with t1: panel(df_2r, "2 RUEDAS")
+with t2: panel(df_4r, "4 RUEDAS")
