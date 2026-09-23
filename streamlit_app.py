@@ -35,7 +35,7 @@ def ultima_fecha_estado(row, cols_fecha):
 
 def es_capital(dep):
     d=str(dep).upper()
-    claves=["DGSV","EDUCACION","OPERACIONES","EJIDO","NORBERTO","TRANSP"]
+    claves=["DGSV","EDUCACION","OPERACIONES","EJIDO","NORBERTO","TRANSP","CAMINERA"]
     return any(k in d for k in claves)
 
 st.title("🚔 Flota DGSV - En prueba")
