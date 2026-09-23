@@ -33,6 +33,11 @@ def ultima_fecha_estado(row, cols_fecha):
             return c, v.upper()
     return "SIN FECHA", "SIN DATO"
 
+def es_capital(dep):
+    d=str(dep).upper()
+    claves=["DGSV","EDUCACION","OPERACIONES","EJIDO","NORBERTO","TRANSP"]
+    return any(k in d for k in claves)
+
 st.title("🚔 Flota DGSV - En prueba")
 if st.button("🔄 Actualizar"):
     st.cache_data.clear()
@@ -93,7 +98,6 @@ def panel(df_base, tipo_rueda):
     precario_c=len(df_base_calc[df_base_calc["ESTADO"]=="PRECARIO"])
     normal_c=len(df_base_calc[df_base_calc["ESTADO"].isin(["NORMAL","ALERTA"])])
 
-    # BOTONERA SIN ALERTA - 5 BOTONES COMO ANTES
     ca,cb,cc,cd,ce=st.columns(5)
     with ca:
         if st.button(f"🔴 QRT\n{qrt_c}", key=f"qrt_{tipo_rueda}", use_container_width=True): st.session_state[key]="QRT"
@@ -140,7 +144,6 @@ def panel(df_base, tipo_rueda):
     else:
         st.dataframe(df_f, use_container_width=True)
 
-    # GRAFICO SIN ALERTA - ALERTA VUELVE DENTRO DE NORMAL
     graf=df_f["ESTADO"].replace({"ALERTA":"NORMAL"}).value_counts().reset_index()
     graf.columns=["Estado","Cantidad"]
     if len(graf)>0:
@@ -152,6 +155,89 @@ def panel(df_base, tipo_rueda):
         ).properties(height=300)
         st.altair_chart(chart, use_container_width=True)
 
-t1,t2=st.tabs([f"🏍️ DOS RUEDAS ({len(df_2r)})", f"🚔 CUATRO RUEDAS ({len(df_4r)})"])
+def panel_capital_interior(df_all):
+    st.header("🏙️ CAPITAL vs 🌄 INTERIOR")
+    df = df_all.copy()
+    df["ESTADO"] = df.apply(calcular_estado, axis=1)
+    df["ESTADO_GRAF"] = df["ESTADO"].replace({"ALERTA":"NORMAL"})
+    df["ZONA"] = df[col_dep].apply(lambda x: "CAPITAL" if es_capital(x) else "INTERIOR")
+
+    # FILTROS DE ESTA PAGINA
+    c1,c2 = st.columns(2)
+    with c1:
+        f_zona = st.selectbox("Filtrar ZONA", ["TODAS","CAPITAL","INTERIOR"], key="f_zona")
+    with c2:
+        f_estado = st.selectbox("Filtrar ESTADO", ["TODOS","NORMAL","QRT","SERVI","PRECARIO"], key="f_estado")
+
+    df_filt = df.copy()
+    if f_zona!="TODAS":
+        df_filt = df_filt[df_filt["ZONA"]==f_zona]
+    if f_estado!="TODOS":
+        if f_estado=="NORMAL":
+            df_filt = df_filt[df_filt["ESTADO"].isin(["NORMAL","ALERTA"])]
+        else:
+            df_filt = df_filt[df_filt["ESTADO"]==f_estado]
+
+    # RESUMEN EN 2 COLUMNAS
+    col_cap, col_int = st.columns(2)
+    for zona, col in [("CAPITAL", col_cap), ("INTERIOR", col_int)]:
+        with col:
+            dz = df_filt[df_filt["ZONA"]==zona] if f_zona=="TODAS" else (df_filt if f_zona==zona else df[df["ZONA"]==zona])
+            # Si esta filtrado por zona, usamos df_filt, si no el total
+            if f_zona!="TODAS":
+                dz = df_filt
+            else:
+                dz = df[ df["ZONA"]==zona ]
+                if f_estado!="TODOS":
+                    if f_estado=="NORMAL":
+                        dz = dz[dz["ESTADO"].isin(["NORMAL","ALERTA"])]
+                    else:
+                        dz = dz[dz["ESTADO"]==f_estado]
+
+            total=len(dz)
+            qrt=len(dz[dz["ESTADO"]=="QRT"])
+            serv=len(dz[dz["ESTADO"]=="SERVI"])
+            prec=len(dz[dz["ESTADO"]=="PRECARIO"])
+            norm=len(dz[dz["ESTADO"].isin(["NORMAL","ALERTA"])])
+
+            st.subheader(f"{zona} - {total} móviles")
+            m1,m2,m3,m4=st.columns(4)
+            m1.metric("NORMAL", norm)
+            m2.metric("QRT", qrt)
+            m3.metric("SERVI", serv)
+            m4.metric("PRECARIO", prec)
+
+            graf=dz["ESTADO_GRAF"].value_counts().reset_index()
+            graf.columns=["Estado","Cantidad"]
+            if len(graf)>0:
+                graf["Porcentaje"]=graf["Cantidad"]/graf["Cantidad"].sum()*100
+                chart=alt.Chart(graf).mark_bar().encode(
+                    x=alt.X('Estado:N', sort=["NORMAL","QRT","PRECARIO","SERVI"]),
+                    y='Cantidad:Q',
+                    color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI"], range=["#22c55e","#ef4444","#eab308","#3b82f6"]), legend=None),
+                    tooltip=['Estado','Cantidad', alt.Tooltip('Porcentaje:Q', format='.1f')]
+                ).properties(height=250)
+                st.altair_chart(chart, use_container_width=True)
+                for _, r in graf.iterrows():
+                    st.caption(f"{r['Estado']}: {r['Cantidad']} ({r['Porcentaje']:.1f}%)")
+
+    st.divider()
+    st.subheader(f"📋 Listado {f_zona} - {f_estado}")
+    lista=[]
+    for _, r in df_filt.iterrows():
+        fecha, est = ultima_fecha_estado(r, cols_fecha)
+        lista.append({
+            "MOVIL": r[col_movil],
+            "ZONA": r["ZONA"],
+            "ESTADO": est,
+            "DEPENDENCIA": r[col_dep],
+            "SIGA": r[col_siga] if str(r[col_siga]).strip()!="" else "SIN EXPTE",
+            "UBICACION": r[col_ubi] if str(r[col_ubi]).strip()!="" else "SIN UBICACION"
+        })
+    st.dataframe(pd.DataFrame(lista), use_container_width=True)
+
+# 3 PESTAÑAS
+t1,t2,t3=st.tabs([f"🏍️ DOS RUEDAS ({len(df_2r)})", f"🚔 CUATRO RUEDAS ({len(df_4r)})", "🏙️ CAPITAL / INTERIOR"])
 with t1: panel(df_2r, "2 RUEDAS")
 with t2: panel(df_4r, "4 RUEDAS")
+with t3: panel_capital_interior(df_all)
