@@ -38,7 +38,7 @@ def es_capital(dep):
     claves=["DGSV","EDUCACION","OPERACIONES","EJIDO","NORBERTO","TRANSP","CAMINERA"]
     return any(k in d for k in claves)
 
-st.title("🚔 Flota DGSV - En prueba")
+st.title("🚔 Flota DGSV - PRELIMINAR 2026")
 if st.button("🔄 Actualizar"):
     st.cache_data.clear()
     st.rerun()
@@ -156,7 +156,7 @@ def panel(df_base, tipo_rueda):
         st.altair_chart(chart, use_container_width=True)
 
 def panel_capital_interior(df_all):
-    st.header("🏙️ CAPITAL vs 🌄 INTERIOR")
+    st.header("🏙️ CAPITAL / 🌄 INTERIOR")
     df = df_all.copy()
     df["ESTADO"] = df.apply(calcular_estado, axis=1)
     df["ESTADO_GRAF"] = df["ESTADO"].replace({"ALERTA":"NORMAL"})
