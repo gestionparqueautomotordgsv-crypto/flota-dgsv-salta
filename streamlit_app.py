@@ -94,12 +94,13 @@ def panel(df_base, tipo_rueda):
 
     alerta_df = df_base_calc[df_base_calc["ESTADO"]=="ALERTA"]
 
-    # BOTONERA SIN CONTAR ALERTAS
-    qrt_c=len(df_base_calc[df_base_calc["ESTADO"]=="QRT"])
-    servi_c=len(df_base_calc[df_base_calc["ESTADO"]=="SERVI"])
-    precario_c=len(df_base_calc[df_base_calc["ESTADO"]=="PRECARIO"])
-    normal_c=len(df_base_calc[df_base_calc["ESTADO"]=="NORMAL"])
-    total_sin_alerta = qrt_c + servi_c + precario_c + normal_c
+    # BOTONERA SIN ALERTAS - NI SUMA NI RESTA
+    df_sin_alerta = df_base_calc[df_base_calc["ESTADO"]!="ALERTA"]
+    qrt_c=len(df_sin_alerta[df_sin_alerta["ESTADO"]=="QRT"])
+    servi_c=len(df_sin_alerta[df_sin_alerta["ESTADO"]=="SERVI"])
+    precario_c=len(df_sin_alerta[df_sin_alerta["ESTADO"]=="PRECARIO"])
+    normal_c=len(df_sin_alerta[df_sin_alerta["ESTADO"]=="NORMAL"])
+    total_sin_alerta = len(df_sin_alerta)
 
     ca,cb,cc,cd,ce=st.columns(5)
     with ca:
@@ -114,7 +115,7 @@ def panel(df_base, tipo_rueda):
         if st.button(f"⬛ TOTAL\n{total_sin_alerta}", key=f"total_{tipo_rueda}", use_container_width=True): st.session_state[key]="TODOS"
 
     if len(alerta_df)>0:
-        st.markdown(f"<div style='background:#fff3cd;border:2px solid #ffc107;padding:12px;border-radius:8px;margin-top:10px;color:#664d03'>🟡 <b>ALERTA KM {tipo_rueda}: {len(alerta_df)} próximos al servi (a 1000km) - NO CONTADOS EN BOTONERA</b></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background:#fff3cd;border:2px solid #ffc107;padding:12px;border-radius:8px;margin-top:10px;color:#664d03'>🟡 <b>ALERTA KM {tipo_rueda}: {len(alerta_df)} próximos al servi - INFORMATIVO, NO CUENTA EN BOTONERA</b></div>", unsafe_allow_html=True)
         for _, r in alerta_df.iterrows():
             st.markdown(f"⚠️ **{r[col_movil]} - {r[col_km_act]}km / Toca {r[col_prox]}km - {r[col_dep]}**")
 
@@ -146,20 +147,30 @@ def panel(df_base, tipo_rueda):
             })
         st.dataframe(pd.DataFrame(lista), use_container_width=True)
     else:
-        # En TODOS tampoco mostramos las alertas porque no se cuentan
         st.dataframe(df_f, use_container_width=True)
 
-    # GRAFICO DE TORTA - SIN ALERTA
+    # GRAFICO DE TORTA CON % DENTRO
     graf=df_f["ESTADO"].value_counts().reset_index()
     graf.columns=["Estado","Cantidad"]
     graf = graf[graf["Estado"]!="ALERTA"]
     if len(graf)>0:
-        chart=alt.Chart(graf).mark_arc(innerRadius=50).encode(
-            theta=alt.Theta('Cantidad:Q'),
-            color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI"], range=["#22c55e","#ef4444","#eab308","#3b82f6"])),
-            tooltip=['Estado','Cantidad']
-        ).properties(height=350)
-        st.altair_chart(chart, use_container_width=True)
+        graf["Porcentaje"] = graf["Cantidad"] / graf["Cantidad"].sum() * 100
+        graf["Label"] = graf["Estado"] + " " + graf["Porcentaje"].round(1).astype(str) + "%"
+
+        base = alt.Chart(graf).encode(theta=alt.Theta("Cantidad:Q"))
+
+        pie = base.mark_arc(innerRadius=50, outerRadius=120).encode(
+            color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI"], range=["#22c55e","#ef4444","#eab308","#3b82f6"]), legend=None),
+            tooltip=['Estado','Cantidad', alt.Tooltip('Porcentaje:Q', format='.1f')]
+        )
+
+        text = base.mark_text(radius=155, size=13, fontWeight="bold").encode(
+            text=alt.Text('Label:N'),
+            color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI"], range=["#22c55e","#ef4444","#eab308","#3b82f6"]), legend=None),
+            theta=alt.Theta('Cantidad:Q')
+        )
+
+        st.altair_chart(pie + text, use_container_width=True)
 
 def panel_capital_interior(df_all):
     st.header("🏙️ CAPITAL vs 🌄 INTERIOR")
