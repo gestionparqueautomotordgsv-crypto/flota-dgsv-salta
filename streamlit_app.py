@@ -4,6 +4,50 @@ import altair as alt
 import re
 
 st.set_page_config(page_title="Flota DGSV", layout="wide", page_icon="🚔")
+
+# --- LOGIN 9 USUARIOS ---
+USUARIOS = {
+    "ayt000": "boot41",
+    "op555": "arm15",
+    "rt8080": "gre098",
+    "gral001": "shi043",
+    "dr002": "mt320",
+    "jo003": "arc329",
+    "of341": "cou120",
+    "ucontrl": "crea43",
+    "ucontrl2": "bless22"
+}
+
+if "auth" not in st.session_state:
+    st.session_state.auth = False
+    st.session_state.user = ""
+
+def login():
+    st.title("🔐 Acceso Flota DGSV")
+    st.markdown("Ingrese usuario y contraseña")
+    with st.form("login_form"):
+        user = st.text_input("Usuario").strip()
+        pwd = st.text_input("Contraseña", type="password").strip()
+        entrar = st.form_submit_button("Entrar", use_container_width=True)
+        if entrar:
+            if user in USUARIOS and USUARIOS[user] == pwd:
+                st.session_state.auth = True
+                st.session_state.user = user
+                st.rerun()
+            else:
+                st.error("Usuario o contraseña incorrecta")
+    st.stop()
+
+if not st.session_state.auth:
+    login()
+
+st.sidebar.success(f"👤 {st.session_state.user}")
+if st.sidebar.button("Cerrar sesión"):
+    st.session_state.auth = False
+    st.session_state.user = ""
+    st.rerun()
+
+# --- APP ---
 URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRO9kumGN6YMvBI_hGc-D9Lb8y29RqNubvkIN1gpgN6I8QKjZ2QBNQ3ItyVkLZeuw/pub?gid=1702506345&single=true&output=csv"
 
 @st.cache_data(ttl=10)
@@ -82,23 +126,18 @@ def grafico_torta_responsive(df_estados):
         return
     graf["Porcentaje"] = graf["Cantidad"] / graf["Cantidad"].sum() * 100
     graf["Txt_in"] = graf["Porcentaje"].map(lambda x: f"{x:.1f}%")
-
     colores = {"NORMAL":"#22c55e","QRT":"#ef4444","PRECARIO":"#eab308","SERVI":"#3b82f6"}
     domain = ["NORMAL","QRT","PRECARIO","SERVI"]
     range_color = [colores[k] for k in domain]
-
     base = alt.Chart(graf).encode(theta=alt.Theta("Cantidad:Q", stack=True))
     pie = base.mark_arc(innerRadius=60, outerRadius=120).encode(
-        color=alt.Color('Estado:N', scale=alt.Scale(domain=domain, range=range_color), legend=alt.Legend(orient="bottom", title=None, labelFontSize=13)),
+        color=alt.Color('Estado:N', scale=alt.Scale(domain=domain, range=range_color), legend=alt.Legend(orient="bottom", title=None)),
         tooltip=['Estado','Cantidad', alt.Tooltip('Porcentaje:Q', format='.1f')]
     )
     texto = base.mark_text(radius=85, size=15, fontWeight="bold", color="white").encode(text='Txt_in:N')
     st.altair_chart((pie + texto).properties(height=360).configure_view(strokeWidth=0), use_container_width=True)
-
-    # Cajitas abajo igual que botonera para celular
     cols = st.columns(4)
-    orden = ["NORMAL","QRT","PRECARIO","SERVI"]
-    for i, est in enumerate(orden):
+    for i, est in enumerate(["NORMAL","QRT","PRECARIO","SERVI"]):
         fila = graf[graf["Estado"]==est]
         if len(fila)>0:
             r = fila.iloc[0]
@@ -114,24 +153,20 @@ def panel(df_base, tipo_rueda):
     with c2:
         deps = ["TODAS"] + sorted([x for x in df_base[col_dep].unique() if str(x).strip()!=""]) if col_dep and col_dep in df_base else ["TODAS"]
         busca_dep = st.selectbox(f"🏢 DEPENDENCIA en {tipo_rueda}", deps, key=f"dep_{tipo_rueda}")
-
     df_base_f = df_base.copy()
     if busca_movil and col_movil:
         df_base_f = df_base_f[df_base_f[col_movil].astype(str).str.contains(busca_movil, na=False)]
     if busca_dep!="TODAS" and col_dep and col_dep in df_base_f:
         df_base_f = df_base_f[df_base_f[col_dep]==busca_dep]
-
     df_base_calc=df_base_f.copy()
     df_base_calc["ESTADO"]=df_base_calc.apply(estado_real, axis=1)
     df_base_calc["ALERTA"]=df_base_calc.apply(es_alerta, axis=1)
     alerta_df = df_base_calc[df_base_calc["ALERTA"]==True]
-
     qrt_c=len(df_base_calc[df_base_calc["ESTADO"]=="QRT"])
     servi_c=len(df_base_calc[df_base_calc["ESTADO"]=="SERVI"])
     precario_c=len(df_base_calc[df_base_calc["ESTADO"]=="PRECARIO"])
     normal_c=len(df_base_calc[df_base_calc["ESTADO"]=="NORMAL"])
     total = len(df_base_calc)
-
     ca,cb,cc,cd,ce=st.columns(5)
     with ca:
         if st.button(f"🔴 QRT\n{qrt_c}", key=f"qrt_{tipo_rueda}", use_container_width=True): st.session_state[key]="QRT"
@@ -143,22 +178,17 @@ def panel(df_base, tipo_rueda):
         if st.button(f"🟡 PRECARIO\n{precario_c}", key=f"prec_{tipo_rueda}", use_container_width=True): st.session_state[key]="PRECARIO"
     with ce:
         if st.button(f"⬛ TOTAL\n{total}", key=f"total_{tipo_rueda}", use_container_width=True): st.session_state[key]="TODOS"
-
     if len(alerta_df)>0:
-        st.warning(f"🟡 ALERTA {tipo_rueda}: {len(alerta_df)} próximos al service - solo informativo")
+        st.warning(f"🟡 ALERTA {tipo_rueda}: {len(alerta_df)} próximos al service - solo informativo, no modifica botonera ni gráfico")
         for _, r in alerta_df.iterrows():
-            st.caption(f"⚠️ {r[col_movil]} - {r[col_km_act]}km / Toca {r[col_prox]}km - {r[col_dep]} ({r['ESTADO']})")
-
+            st.caption(f"⚠️ {r[col_movil]} - {r[col_km_act]}km / Toca {r[col_prox]}km - {r[col_dep]}")
     filtro=st.session_state[key]
     df_f=df_base_calc.copy()
     if filtro!="TODOS":
         df_f=df_f[df_f["ESTADO"]==filtro]
-
     st.divider()
     grafico_torta_responsive(df_f["ESTADO"])
     st.divider()
-
-    st.subheader(f"📋 {filtro} en {tipo_rueda}")
     lista=[]
     for _, r in df_f.iterrows():
         fecha, est = ultima_fecha_estado(r, cols_fecha)
@@ -181,14 +211,6 @@ def panel_capital_interior(df_all):
     df_filt = df.copy()
     if f_zona!="TODAS": df_filt = df_filt[df_filt["ZONA"]==f_zona]
     if f_estado!="TODOS": df_filt = df_filt[df_filt["ESTADO"]==f_estado]
-    col_cap, col_int = st.columns(2)
-    for zona, col in [("CAPITAL", col_cap), ("INTERIOR", col_int)]:
-        with col:
-            dz = df_filt if f_zona!="TODAS" else df[df["ZONA"]==zona]
-            if f_zona=="TODAS" and f_estado!="TODOS": dz = dz[dz["ESTADO"]==f_estado]
-            st.subheader(f"{zona} - {len(dz)}")
-            grafico_torta_responsive(dz["ESTADO"])
-    st.divider()
     st.dataframe(df_filt, use_container_width=True)
 
 t1,t2,t3=st.tabs([f"🏍️ DOS RUEDAS ({len(df_2r)})", f"🚔 CUATRO RUEDAS ({len(df_4r)})", "🏙️ CAPITAL / INTERIOR"])
