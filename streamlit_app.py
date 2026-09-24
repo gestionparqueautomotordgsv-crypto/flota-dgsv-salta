@@ -94,13 +94,12 @@ def panel(df_base, tipo_rueda):
 
     alerta_df = df_base_calc[df_base_calc["ESTADO"]=="ALERTA"]
 
-    # BOTONERA SIN ALERTAS - NI SUMA NI RESTA
-    df_sin_alerta = df_base_calc[df_base_calc["ESTADO"]!="ALERTA"]
-    qrt_c=len(df_sin_alerta[df_sin_alerta["ESTADO"]=="QRT"])
-    servi_c=len(df_sin_alerta[df_sin_alerta["ESTADO"]=="SERVI"])
-    precario_c=len(df_sin_alerta[df_sin_alerta["ESTADO"]=="PRECARIO"])
-    normal_c=len(df_sin_alerta[df_sin_alerta["ESTADO"]=="NORMAL"])
-    total_sin_alerta = len(df_sin_alerta)
+    # BOTONERA - ALERTA NI SUMA NI RESTA, QUEDA DENTRO DE NORMAL
+    qrt_c=len(df_base_calc[df_base_calc["ESTADO"]=="QRT"])
+    servi_c=len(df_base_calc[df_base_calc["ESTADO"]=="SERVI"])
+    precario_c=len(df_base_calc[df_base_calc["ESTADO"]=="PRECARIO"])
+    normal_c=len(df_base_calc[df_base_calc["ESTADO"].isin(["NORMAL","ALERTA"])]) # ALERTA CUENTA COMO NORMAL
+    total = len(df_base_calc) # TOTAL REAL, SIN RESTAR ALERTA
 
     ca,cb,cc,cd,ce=st.columns(5)
     with ca:
@@ -112,10 +111,10 @@ def panel(df_base, tipo_rueda):
     with cd:
         if st.button(f"🟡 PRECARIO\n{precario_c}", key=f"prec_{tipo_rueda}", use_container_width=True): st.session_state[key]="PRECARIO"
     with ce:
-        if st.button(f"⬛ TOTAL\n{total_sin_alerta}", key=f"total_{tipo_rueda}", use_container_width=True): st.session_state[key]="TODOS"
+        if st.button(f"⬛ TOTAL\n{total}", key=f"total_{tipo_rueda}", use_container_width=True): st.session_state[key]="TODOS"
 
     if len(alerta_df)>0:
-        st.markdown(f"<div style='background:#fff3cd;border:2px solid #ffc107;padding:12px;border-radius:8px;margin-top:10px;color:#664d03'>🟡 <b>ALERTA KM {tipo_rueda}: {len(alerta_df)} próximos al servi - INFORMATIVO, NO CUENTA EN BOTONERA</b></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background:#fff3cd;border:2px solid #ffc107;padding:12px;border-radius:8px;margin-top:10px;color:#664d03'>🟡 <b>ALERTA KM {tipo_rueda}: {len(alerta_df)} próximos al servi (a 1000km) - INFORMATIVO</b></div>", unsafe_allow_html=True)
         for _, r in alerta_df.iterrows():
             st.markdown(f"⚠️ **{r[col_movil]} - {r[col_km_act]}km / Toca {r[col_prox]}km - {r[col_dep]}**")
 
@@ -124,8 +123,8 @@ def panel(df_base, tipo_rueda):
     if filtro=="QRT": df_f=df_f[df_f["ESTADO"]=="QRT"]
     elif filtro=="SERVI": df_f=df_f[df_f["ESTADO"]=="SERVI"]
     elif filtro=="PRECARIO": df_f=df_f[df_f["ESTADO"]=="PRECARIO"]
-    elif filtro=="NORMAL": df_f=df_f[df_f["ESTADO"]=="NORMAL"]
-    elif filtro=="TODOS": df_f=df_f[df_f["ESTADO"]!="ALERTA"]
+    elif filtro=="NORMAL": df_f=df_f[df_f["ESTADO"].isin(["NORMAL","ALERTA"])]
+    # TODOS deja todo
 
     st.divider()
 
@@ -149,10 +148,12 @@ def panel(df_base, tipo_rueda):
     else:
         st.dataframe(df_f, use_container_width=True)
 
-    # GRAFICO DE TORTA CON % DENTRO
-    graf=df_f["ESTADO"].value_counts().reset_index()
+    # GRAFICO DE TORTA CON % DENTRO - ALERTA CONTADA COMO NORMAL
+    df_graf = df_f.copy()
+    df_graf["ESTADO"] = df_graf["ESTADO"].replace({"ALERTA":"NORMAL"})
+
+    graf=df_graf["ESTADO"].value_counts().reset_index()
     graf.columns=["Estado","Cantidad"]
-    graf = graf[graf["Estado"]!="ALERTA"]
     if len(graf)>0:
         graf["Porcentaje"] = graf["Cantidad"] / graf["Cantidad"].sum() * 100
         graf["Label"] = graf["Estado"] + " " + graf["Porcentaje"].round(1).astype(str) + "%"
@@ -189,7 +190,10 @@ def panel_capital_interior(df_all):
     if f_zona!="TODAS":
         df_filt = df_filt[df_filt["ZONA"]==f_zona]
     if f_estado!="TODOS":
-        df_filt = df_filt[df_filt["ESTADO"]==f_estado]
+        if f_estado=="NORMAL":
+            df_filt = df_filt[df_filt["ESTADO"].isin(["NORMAL","ALERTA"])]
+        else:
+            df_filt = df_filt[df_filt["ESTADO"]==f_estado]
 
     col_cap, col_int = st.columns(2)
     for zona, col in [("CAPITAL", col_cap), ("INTERIOR", col_int)]:
@@ -199,13 +203,16 @@ def panel_capital_interior(df_all):
             else:
                 dz = df[ df["ZONA"]==zona ]
                 if f_estado!="TODOS":
-                    dz = dz[dz["ESTADO"]==f_estado]
+                    if f_estado=="NORMAL":
+                        dz = dz[dz["ESTADO"].isin(["NORMAL","ALERTA"])]
+                    else:
+                        dz = dz[dz["ESTADO"]==f_estado]
 
             total=len(dz)
             qrt=len(dz[dz["ESTADO"]=="QRT"])
             serv=len(dz[dz["ESTADO"]=="SERVI"])
             prec=len(dz[dz["ESTADO"]=="PRECARIO"])
-            norm=len(dz[dz["ESTADO"]=="NORMAL"])
+            norm=len(dz[dz["ESTADO"].isin(["NORMAL","ALERTA"])])
 
             st.subheader(f"{zona} - {total} móviles")
             m1,m2,m3,m4=st.columns(4)
@@ -214,14 +221,14 @@ def panel_capital_interior(df_all):
             m3.metric("SERVI", serv)
             m4.metric("PRECARIO", prec)
 
-            graf=dz["ESTADO_GRAF"].value_counts().reset_index()
+            graf=dz["ESTADO_GRAF"].replace({"ALERTA":"NORMAL"}).value_counts().reset_index()
             graf.columns=["Estado","Cantidad"]
             if len(graf)>0:
                 graf["Porcentaje"]=graf["Cantidad"]/graf["Cantidad"].sum()*100
                 chart=alt.Chart(graf).mark_bar().encode(
                     x=alt.X('Estado:N', sort=["NORMAL","QRT","PRECARIO","SERVI"]),
                     y='Cantidad:Q',
-                    color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI","ALERTA"], range=["#22c55e","#ef4444","#eab308","#3b82f6","#facc15"]), legend=None),
+                    color=alt.Color('Estado:N', scale=alt.Scale(domain=["NORMAL","QRT","PRECARIO","SERVI"], range=["#22c55e","#ef4444","#eab308","#3b82f6"]), legend=None),
                     tooltip=['Estado','Cantidad', alt.Tooltip('Porcentaje:Q', format='.1f')]
                 ).properties(height=250)
                 st.altair_chart(chart, use_container_width=True)
