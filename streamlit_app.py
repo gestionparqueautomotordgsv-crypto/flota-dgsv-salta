@@ -112,8 +112,6 @@ def estado_real(row):
     return "NORMAL"
 
 def es_alerta(row):
-    movil=str(row[col_movil]) if col_movil else ""
-    if "2378" in movil: return True
     if col_km_act and col_prox:
         km=num(row[col_km_act]); prox=num(row[col_prox])
         if prox>0 and km>0 and km>=prox-1000: return True
