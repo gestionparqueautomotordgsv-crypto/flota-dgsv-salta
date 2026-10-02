@@ -117,12 +117,14 @@ def es_alerta(row):
         if prox>0 and km>0 and km>=prox-1000: return True
     return False
 
+# --- GRAFICO ARREGLADO ---
 def grafico_torta_responsive(df_estados):
     graf=df_estados.value_counts().reset_index()
     graf.columns=["Estado","Cantidad"]
     if len(graf)==0:
         return
     graf["Porcentaje"] = graf["Cantidad"] / graf["Cantidad"].sum() * 100
+    graf["Txt"] = graf.apply(lambda r: f"{r['Estado']} {r['Porcentaje']:.1f}% ({r['Cantidad']})", axis=1)
     graf["Txt_in"] = graf["Porcentaje"].map(lambda x: f"{x:.1f}%")
     colores = {"NORMAL":"#22c55e","QRT":"#ef4444","PRECARIO":"#eab308","SERVI":"#3b82f6"}
     domain = ["NORMAL","QRT","PRECARIO","SERVI"]
@@ -132,8 +134,12 @@ def grafico_torta_responsive(df_estados):
         color=alt.Color('Estado:N', scale=alt.Scale(domain=domain, range=range_color), legend=alt.Legend(orient="bottom", title=None)),
         tooltip=['Estado','Cantidad', alt.Tooltip('Porcentaje:Q', format='.1f')]
     )
-    texto = base.mark_text(radius=85, size=15, fontWeight="bold", color="white").encode(text='Txt_in:N')
-    st.altair_chart((pie + texto).properties(height=360).configure_view(strokeWidth=0), use_container_width=True)
+    texto = base.mark_text(radius=155, size=14, fontWeight="bold").encode(
+        text='Txt:N',
+        color=alt.Color('Estado:N', scale=alt.Scale(domain=domain, range=range_color), legend=None)
+    )
+    texto_in = base.mark_text(radius=90, size=13, fontWeight="bold", color="black").encode(text='Txt_in:N')
+    st.altair_chart((pie + texto + texto_in).properties(height=380).configure_view(strokeWidth=0), use_container_width=True)
     cols = st.columns(4)
     for i, est in enumerate(["NORMAL","QRT","PRECARIO","SERVI"]):
         fila = graf[graf["Estado"]==est]
@@ -177,7 +183,7 @@ def panel(df_base, tipo_rueda):
     with ce:
         if st.button(f"⬛ TOTAL\n{total}", key=f"total_{tipo_rueda}", use_container_width=True): st.session_state[key]="TODOS"
     if len(alerta_df)>0:
-        st.warning(f"🟡 ALERTA {tipo_rueda}: {len(alerta_df)} próximos al service - solo informativo, no modifica botonera ni gráfico")
+        st.warning(f"🟡 ALERTA {tipo_rueda}: {len(alerta_df)} próximos al service")
         for _, r in alerta_df.iterrows():
             st.caption(f"⚠️ {r[col_movil]} - {r[col_km_act]}km / Toca {r[col_prox]}km - {r[col_dep]}")
     filtro=st.session_state[key]
