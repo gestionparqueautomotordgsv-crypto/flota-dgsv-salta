@@ -82,7 +82,7 @@ def es_capital(dep):
     claves=["DGSV","EDUCACION","OPERACIONES","EJIDO","NORBERTO","TRANSP"]
     return any(k in d for k in claves)
 
-st.title("🚔 Flota DGSV - En prueba")
+st.title("🚔 Flota DGSV - PRELIMINAR")
 if st.button("🔄 Actualizar"):
     st.cache_data.clear()
     st.rerun()
@@ -138,7 +138,6 @@ def grafico_torta_responsive(df_estados):
         text='Txt:N',
         color=alt.Color('Estado:N', scale=alt.Scale(domain=domain, range=range_color), legend=None)
     )
-    texto_in = base.mark_text(radius=90, size=13, fontWeight="bold", color="black").encode(text='Txt_in:N')
     st.altair_chart((pie + texto + texto_in).properties(height=380).configure_view(strokeWidth=0), use_container_width=True)
     cols = st.columns(4)
     for i, est in enumerate(["NORMAL","QRT","PRECARIO","SERVI"]):
