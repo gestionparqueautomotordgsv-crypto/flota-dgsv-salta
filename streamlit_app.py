@@ -122,6 +122,41 @@ def grafico_torta_responsive(df_estados):
     graf=df_estados.value_counts().reset_index()
     graf.columns=["Estado","Cantidad"]
     if len(graf)==0:
+        st.info("Sin datos para graficar")
+        return
+    graf["Porcentaje"] = graf["Cantidad"] / graf["Cantidad"].sum() * 100
+    graf["Txt"] = graf.apply(lambda r: f"{r['Estado']} {r['Porcentaje']:.1f}% ({r['Cantidad']})", axis=1)
+
+    colores = {"NORMAL":"#16a34a","QRT":"#dc2626","PRECARIO":"#ca8a04","SERVI":"#2563eb"}
+    domain = ["NORMAL","QRT","PRECARIO","SERVI"]
+    range_color = [colores[k] for k in domain]
+
+    base = alt.Chart(graf).encode(theta=alt.Theta("Cantidad:Q", stack=True))
+
+    pie = base.mark_arc(innerRadius=65, outerRadius=115, opacity=1).encode(
+        color=alt.Color('Estado:N', scale=alt.Scale(domain=domain, range=range_color), legend=alt.Legend(orient="bottom", title=None)),
+        tooltip=['Estado','Cantidad', alt.Tooltip('Porcentaje:Q', format='.1f')]
+    )
+
+    texto = base.mark_text(radius=140, size=13, fontWeight="bold").encode(
+        text='Txt:N',
+        color=alt.Color('Estado:N', scale=alt.Scale(domain=domain, range=range_color), legend=None)
+    )
+
+    chart = (pie + texto).properties(height=420).configure_view(strokeWidth=0)
+    st.altair_chart(chart, use_container_width=True)
+
+    cols = st.columns(4)
+    for i, est in enumerate(["NORMAL","QRT","PRECARIO","SERVI"]):
+        fila = graf[graf["Estado"]==est]
+        if len(fila)>0:
+            r = fila.iloc[0]
+            with cols[i]:
+                st.markdown(f"<div style='text-align:center;background:{colores[est]}22;border:2px solid {colores[est]};border-radius:10px;padding:8px'><b style='color:{colores[est]}'>{est}</b><br><b>{r['Cantidad']} ({r['Porcentaje']:.1f}%)</b></div>", unsafe_allow_html=True)
+def grafico_torta_responsive(df_estados):
+    graf=df_estados.value_counts().reset_index()
+    graf.columns=["Estado","Cantidad"]
+    if len(graf)==0:
         return
     graf["Porcentaje"] = graf["Cantidad"] / graf["Cantidad"].sum() * 100
     graf["Txt"] = graf.apply(lambda r: f"{r['Estado']} {r['Porcentaje']:.1f}% ({r['Cantidad']})", axis=1)
