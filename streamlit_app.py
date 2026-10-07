@@ -5,7 +5,6 @@ import re
 
 st.set_page_config(page_title="Flota DGSV", layout="wide", page_icon="🚔")
 
-# --- LOGIN 9 USUARIOS ---
 USUARIOS = {
     "ayt000": "boot41",
     "op555": "arm15",
@@ -47,7 +46,6 @@ if st.sidebar.button("Cerrar sesión"):
     st.session_state.user = ""
     st.rerun()
 
-# --- APP ---
 URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRO9kumGN6YMvBI_hGc-D9Lb8y29RqNubvkIN1gpgN6I8QKjZ2QBNQ3ItyVkLZeuw/pub?gid=1702506345&single=true&output=csv"
 
 @st.cache_data(ttl=10)
@@ -95,6 +93,8 @@ col_prox=buscar_col(df_all,["PROXIMO"])
 col_dep=buscar_col(df_all,["DEPENDENCIA","DESTINO","UNIDAD"])
 col_siga=buscar_col(df_all,["SIGA","EXPTE"])
 col_ubi=buscar_col(df_all,["UBICACION","UBICACIÓN"])
+# NUEVA COLUMNA AGREGADA DESPUES DE UBICACION
+col_obs=buscar_col(df_all,["OBSERVACIONES","OBSERVACION","OBS","NOVEDAD","MOTIVO"])
 cols_fecha=[c for c in df_all.columns if "/" in c]
 
 df_2r=df_all[df_all[col_tipo].str.contains("2",na=False)] if col_tipo else df_all
@@ -117,7 +117,6 @@ def es_alerta(row):
         if prox>0 and km>0 and km>=prox-1000: return True
     return False
 
-# --- GRAFICO ARREGLADO SIN NUMEROS NEGROS ADENTRO ---
 def grafico_torta_responsive(df_estados):
     graf=df_estados.value_counts().reset_index()
     graf.columns=["Estado","Cantidad"]
@@ -126,26 +125,20 @@ def grafico_torta_responsive(df_estados):
         return
     graf["Porcentaje"] = graf["Cantidad"] / graf["Cantidad"].sum() * 100
     graf["Txt"] = graf.apply(lambda r: f"{r['Estado']} {r['Porcentaje']:.1f}% ({r['Cantidad']})", axis=1)
-
     colores = {"NORMAL":"#16a34a","QRT":"#dc2626","PRECARIO":"#ca8a04","SERVI":"#2563eb"}
     domain = ["NORMAL","QRT","PRECARIO","SERVI"]
     range_color = [colores[k] for k in domain]
-
     base = alt.Chart(graf).encode(theta=alt.Theta("Cantidad:Q", stack=True))
-
     pie = base.mark_arc(innerRadius=65, outerRadius=115, opacity=1).encode(
         color=alt.Color('Estado:N', scale=alt.Scale(domain=domain, range=range_color), legend=alt.Legend(orient="bottom", title=None)),
         tooltip=['Estado','Cantidad', alt.Tooltip('Porcentaje:Q', format='.1f')]
     )
-
     texto = base.mark_text(radius=140, size=13, fontWeight="bold").encode(
         text='Txt:N',
         color=alt.Color('Estado:N', scale=alt.Scale(domain=domain, range=range_color), legend=None)
     )
-
     chart = (pie + texto).properties(height=420).configure_view(strokeWidth=0)
     st.altair_chart(chart, use_container_width=True)
-
     cols = st.columns(4)
     for i, est in enumerate(["NORMAL","QRT","PRECARIO","SERVI"]):
         fila = graf[graf["Estado"]==est]
@@ -204,9 +197,11 @@ def panel(df_base, tipo_rueda):
         fecha, est = ultima_fecha_estado(r, cols_fecha)
         siga = str(r[col_siga]).strip() if col_siga and col_siga in r else ""
         ubi = str(r[col_ubi]).strip() if col_ubi and col_ubi in r else ""
+        obs = str(r[col_obs]).strip() if col_obs and col_obs in r else ""
         if siga=="" or siga.upper()=="NAN": siga="SIN EXPTE"
         if ubi=="" or ubi.upper()=="NAN": ubi="SIN UBICACION"
-        lista.append({"MOVIL": r[col_movil], "ESTADO": est, "ALERTA KM": "⚠️" if r["ALERTA"] else "", "KM ACTUAL": r[col_km_act], "PROX": r[col_prox], "DEPENDENCIA": r[col_dep], "SIGA": siga, "UBICACION": ubi})
+        if obs=="" or obs.upper()=="NAN": obs="-"
+        lista.append({"MOVIL": r[col_movil], "ESTADO": est, "FECHA": fecha, "ALERTA KM": "⚠️" if r["ALERTA"] else "", "KM ACTUAL": r[col_km_act], "PROX": r[col_prox], "DEPENDENCIA": r[col_dep], "SIGA": siga, "UBICACION": ubi, "OBSERVACIONES": obs})
     st.dataframe(pd.DataFrame(lista), use_container_width=True)
 
 def panel_capital_interior(df_all):
